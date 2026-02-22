@@ -53,7 +53,7 @@ def main() -> None:
             print(f"Processed {i + 1}/{len(npy_paths)} files")
 
     # Save output
-    df = pd.DataFrame({"file_name": file_names, "label": labels})
+    df = pd.DataFrame({"segment_name": file_names, "label": labels})
     output_path = output_data_dir / "test_data.csv"
     df.to_csv(output_path, index=False)
     print(f"\nSaved {len(df)} predictions to {output_path}")
