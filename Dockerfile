@@ -27,6 +27,6 @@ VOLUME ["/data"]
 VOLUME ["/output"]
 
 ENV INPUT=""
-ENV OUTPUT=""
+ENV OUTPUT="test_data.csv"
 
 CMD python3 main.py "/data/$INPUT" "/output/$OUTPUT"

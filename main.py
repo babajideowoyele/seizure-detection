@@ -14,8 +14,9 @@ from inference import load_ensemble, predict_single
 
 def main() -> None:
     test_data_dir = Path(sys.argv[1])
-    output_data_dir = Path(sys.argv[2])
-    output_data_dir.mkdir(parents=True, exist_ok=True)
+    output_path = Path(sys.argv[2])
+    # Default: output_path = /output/test_data.csv
+    output_path.parent.mkdir(parents=True, exist_ok=True)
 
     config = Config()
 
@@ -23,7 +24,7 @@ def main() -> None:
     print("Seizure Detection Challenge - Inference")
     print("=" * 60)
     print(f"Input directory: {test_data_dir}")
-    print(f"Output directory: {output_data_dir}")
+    print(f"Output path: {output_path}")
 
     # Load ensemble
     models, threshold = load_ensemble(config)
@@ -54,7 +55,6 @@ def main() -> None:
 
     # Save output
     df = pd.DataFrame({"segment_name": file_names, "label": labels})
-    output_path = output_data_dir / "test_data.csv"
     df.to_csv(output_path, index=False)
     print(f"\nSaved {len(df)} predictions to {output_path}")
     print(f"Predicted seizures: {sum(labels)} ({sum(labels)/len(labels):.1%})")
