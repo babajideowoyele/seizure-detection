@@ -9,7 +9,8 @@ WORKDIR /app
 
 COPY . /app
 
-RUN pip install --no-cache-dir -r requirements.txt
+RUN pip install --no-cache-dir --default-timeout=300 --retries=5 torch==2.2.2
+RUN pip install --no-cache-dir --default-timeout=300 --retries=5 -r requirements.txt
 
 VOLUME ["/data"]
 VOLUME ["/output"]
