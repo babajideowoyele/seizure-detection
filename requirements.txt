@@ -2,3 +2,7 @@ numpy==1.26.4
 pandas==2.2.2
 torch==2.2.2
 scikit-learn==1.4.2
+
+# Video inference (predict_video.py only — not needed for the competition Docker entrypoint)
+mediapipe==0.10.20
+opencv-python-headless==4.10.0.84

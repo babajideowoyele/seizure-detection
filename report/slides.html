@@ -1,0 +1,443 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Video-Based Pediatric Seizure Detection — Slides</title>
+<style>
+  /* 16:9 widescreen, PowerPoint-equivalent dimensions */
+  @page {
+    size: 338.667mm 190.5mm;
+    margin: 0;
+  }
+
+  :root {
+    --bg: #fdfcf8;
+    --ink: #111111;
+    --muted: #555555;
+    --accent: #1a3a52;
+    --rule: #000000;
+    --serif: "Charter", "Cambria", "Palatino Linotype", "Palatino", "Georgia", serif;
+  }
+
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; background: var(--bg); color: var(--ink); font-family: var(--serif); -webkit-font-smoothing: antialiased; text-rendering: optimizeLegibility; }
+
+  .slide {
+    width: 338.667mm;
+    height: 190.5mm;
+    padding: 11mm 18mm 11mm 18mm;
+    page-break-after: always;
+    background: var(--bg);
+    display: flex;
+    flex-direction: column;
+    position: relative;
+    overflow: hidden;
+  }
+  .slide:last-child { page-break-after: auto; }
+
+  .slide-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    border-bottom: 1pt solid var(--rule);
+    padding-bottom: 2.5mm;
+    margin-bottom: 5mm;
+    flex-shrink: 0;
+  }
+  .slide-title {
+    font-family: var(--serif);
+    font-style: italic;
+    font-weight: normal;
+    font-size: 26pt;
+    line-height: 1.1;
+    margin: 0;
+  }
+  .slide-num {
+    font-family: var(--serif);
+    font-style: italic;
+    color: var(--muted);
+    font-size: 12pt;
+  }
+
+  .slide-foot {
+    position: absolute;
+    bottom: 5mm;
+    left: 18mm;
+    right: 18mm;
+    display: flex;
+    justify-content: space-between;
+    font-family: var(--serif);
+    font-style: italic;
+    color: var(--muted);
+    font-size: 9.5pt;
+    border-top: 0.5pt solid #bbb;
+    padding-top: 2mm;
+  }
+
+  .body {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 4mm;
+    min-height: 0;
+    padding-bottom: 12mm; /* keep clear of slide-foot */
+  }
+
+  p, li {
+    font-family: var(--serif);
+    font-size: 15pt;
+    line-height: 1.32;
+    margin: 0 0 2.6mm 0;
+  }
+  ul, ol { margin: 0 0 3mm 0; padding-left: 6mm; }
+  li { margin: 0 0 2mm 0; }
+  strong { font-weight: 600; }
+  em { font-style: italic; }
+  .small { font-size: 12pt; color: var(--muted); }
+
+  /* Title slide */
+  .title-slide {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: flex-start;
+    padding: 18mm 22mm;
+  }
+  .title-slide h1 {
+    font-family: var(--serif);
+    font-style: italic;
+    font-weight: normal;
+    font-size: 38pt;
+    line-height: 1.08;
+    margin: 0 0 7mm 0;
+    border-bottom: 2pt solid var(--rule);
+    padding-bottom: 6mm;
+  }
+  .title-slide .sub {
+    font-style: italic;
+    font-size: 18pt;
+    color: var(--muted);
+    margin-bottom: 10mm;
+    line-height: 1.3;
+  }
+  .title-slide .authors { font-size: 15pt; line-height: 1.4; }
+  .title-slide .affil { font-style: italic; color: var(--muted); font-size: 13pt; margin-top: 1.5mm; }
+  .title-slide .venue { font-size: 12pt; color: var(--muted); font-style: italic; margin-top: 8mm; line-height: 1.4; }
+
+  /* Tables */
+  table {
+    border-collapse: collapse;
+    font-size: 12.5pt;
+    margin: 1mm 0 2mm 0;
+    font-variant-numeric: lining-nums tabular-nums;
+  }
+  th, td { border: none; padding: 1.2mm 4mm; text-align: left; vertical-align: baseline; }
+  thead tr { border-top: 1.4pt solid var(--rule); border-bottom: 0.6pt solid var(--rule); }
+  tbody tr:last-child { border-bottom: 1.4pt solid var(--rule); }
+  th { font-style: italic; font-weight: normal; }
+  td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
+  tr.ours td { font-weight: 600; }
+
+  /* Pipeline figure scaling on slide 3 */
+  .pipeline-slide .figure-wrap {
+    flex: 0 0 auto;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 95mm;
+  }
+  .pipeline-slide svg {
+    width: 100%;
+    height: auto;
+    max-height: 140mm;
+  }
+  .pipeline-slide .right-pane {
+    flex: 1;
+    padding-left: 8mm;
+    border-left: 0.5pt solid #bbb;
+    margin-left: 6mm;
+  }
+  .pipeline-slide .figure-wrap .row {
+    display: flex;
+    align-items: center;
+    gap: 4mm;
+  }
+
+  .two-col {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 7mm;
+    align-items: start;
+  }
+
+  .lead {
+    background: #ebe7d8;
+    padding: 3.5mm 5mm;
+    border-left: 4pt solid var(--accent);
+    font-size: 14.5pt;
+    line-height: 1.32;
+    margin-bottom: 3mm;
+  }
+  .lead strong { color: var(--accent); }
+
+  code, .mono { font-family: Consolas, Menlo, monospace; font-size: 0.92em; }
+</style>
+</head>
+<body>
+
+<!-- =============== SLIDE 1: TITLE =============== -->
+<div class="slide title-slide">
+  <h1>Video-Based Pediatric Seizure Detection<br>from Pose Landmark Sequences</h1>
+  <div class="sub">An ensemble of CNN–GRU and Temporal Convolutional Networks<br>for binary detection of infantile spasms</div>
+  <div class="authors">
+    <strong>Babajide&nbsp;Owoyele</strong>, Sharjeel&nbsp;Shaikh, Wim&nbsp;Pouw,<br>
+    Moritz&nbsp;Schneider, Stefan&nbsp;Konigorski, Gerard&nbsp;de&nbsp;Melo
+    <div class="affil">Hasso Plattner Institute, Universität Potsdam, Germany</div>
+  </div>
+  <div class="venue">
+    2026 Video-Based Seizure Detection Challenge<br>
+    Section on Computational Neurology, Charité — Universitätsmedizin Berlin<br>
+    Int. Conf. on AI in Epilepsy and Other Neurological Disorders
+  </div>
+</div>
+
+<!-- =============== SLIDE 2: PROBLEM =============== -->
+<div class="slide">
+  <div class="slide-head">
+    <h2 class="slide-title">Problem &nbsp;·&nbsp; infantile spasms from pose-only video</h2>
+    <span class="slide-num">2 / 7</span>
+  </div>
+  <div class="body">
+    <div class="lead">
+      <strong>Task —</strong> binary detection of infantile spasms (West syndrome) from 5-second segments of anonymised MediaPipe Pose: $150 \times 33 \times 5$ tensors of <em>x, y, z, visibility, presence</em>.
+    </div>
+
+    <div class="two-col">
+      <div>
+        <p><strong>Why infantile spasms.</strong> Defining seizure type of West syndrome; onset 3–24 months; brief (1–3 s) flexor/extensor/mixed contraction, often clustered. Time-to-treatment strongly predicts cognitive outcome.</p>
+        <p><strong>Why home video.</strong> First observed by caregivers, not clinicians. Home-video review is part of the standard diagnostic pathway.</p>
+      </div>
+      <div>
+        <p><strong>Why pose only.</strong></p>
+        <ul>
+          <li><strong>Privacy:</strong> pose strips identity, room, clothing.</li>
+          <li><strong>Compute:</strong> a few hundred floats / frame, not millions.</li>
+          <li><strong>Robustness:</strong> invariant to lighting, clothing, background.</li>
+        </ul>
+        <p class="small">Ceiling: facial cues, vital signs and audio are <em>not</em> in the pose stream.</p>
+      </div>
+    </div>
+  </div>
+  <div class="slide-foot"><span>Owoyele et al.&nbsp;·&nbsp;HPI Potsdam</span><span>2026 VSDC, Charité</span></div>
+</div>
+
+<!-- =============== SLIDE 3: PIPELINE =============== -->
+<div class="slide pipeline-slide">
+  <div class="slide-head">
+    <h2 class="slide-title">Approach &nbsp;·&nbsp; end-to-end pipeline</h2>
+    <span class="slide-num">3 / 7</span>
+  </div>
+  <div class="body" style="flex-direction: row; gap: 10mm; align-items: stretch;">
+    <div class="figure-wrap" style="flex: 1;">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 500 690">
+        <defs>
+          <marker id="arr" markerWidth="8" markerHeight="8" refX="6" refY="4" orient="auto" markerUnits="userSpaceOnUse">
+            <path d="M0,0 L0,8 L6,4 z" fill="#222"/>
+          </marker>
+        </defs>
+        <style>
+          .b{fill:#fff;stroke:#333;stroke-width:1.3;}
+          .ti{font:italic 17px Charter,Cambria,Palatino,Georgia,serif;fill:#000;}
+          .sub{font:13px Charter,Cambria,Palatino,Georgia,serif;fill:#555;}
+          .l{stroke:#333;stroke-width:1.3;fill:none;}
+        </style>
+        <rect class="b" x="40" y="20" width="190" height="60" rx="2"/>
+        <text class="ti" x="135" y="46" text-anchor="middle">.npy (150,33,5)</text>
+        <text class="sub" x="135" y="66" text-anchor="middle">challenge input</text>
+        <text class="ti" x="250" y="58" text-anchor="middle">or</text>
+        <rect class="b" x="270" y="20" width="190" height="60" rx="2"/>
+        <text class="ti" x="365" y="46" text-anchor="middle">raw video</text>
+        <text class="sub" x="365" y="66" text-anchor="middle">MediaPipe adapter</text>
+        <path class="l" d="M135,80 L135,100 L250,100 L250,120" marker-end="url(#arr)"/>
+        <path class="l" d="M365,80 L365,100 L250,100"/>
+        <rect class="b" x="130" y="120" width="240" height="64" rx="2"/>
+        <text class="ti" x="250" y="144" text-anchor="middle">Preprocess</text>
+        <text class="sub" x="250" y="164" text-anchor="middle">NaN fill · hip-center · torso-norm</text>
+        <line class="l" x1="250" y1="184" x2="250" y2="212" marker-end="url(#arr)"/>
+        <rect class="b" x="100" y="212" width="300" height="78" rx="2"/>
+        <text class="ti" x="250" y="236" text-anchor="middle">Features  150 × 518</text>
+        <text class="sub" x="250" y="256" text-anchor="middle">raw · vel · acc · speed</text>
+        <text class="sub" x="250" y="272" text-anchor="middle">joint angles · symmetry · NaN</text>
+        <text class="sub" x="250" y="288" text-anchor="middle">low-freq FFT power</text>
+        <path class="l" d="M250,290 L250,312 L130,312 L130,332" marker-end="url(#arr)"/>
+        <path class="l" d="M250,290 L250,312 L370,312 L370,332" marker-end="url(#arr)"/>
+        <rect class="b" x="35" y="332" width="190" height="76" rx="2"/>
+        <text class="ti" x="130" y="356" text-anchor="middle">CNN–GRU × 5</text>
+        <text class="sub" x="130" y="376" text-anchor="middle">1D-CNN → BiGRU(2)</text>
+        <text class="sub" x="130" y="392" text-anchor="middle">→ attention → MLP</text>
+        <rect class="b" x="275" y="332" width="190" height="76" rx="2"/>
+        <text class="ti" x="370" y="356" text-anchor="middle">TCN × 5</text>
+        <text class="sub" x="370" y="376" text-anchor="middle">5 dilated blocks (1→16)</text>
+        <text class="sub" x="370" y="392" text-anchor="middle">→ attention → MLP</text>
+        <path class="l" d="M130,408 L130,430 L250,430 L250,452" marker-end="url(#arr)"/>
+        <path class="l" d="M370,408 L370,430 L250,430"/>
+        <rect class="b" x="130" y="452" width="240" height="56" rx="2"/>
+        <text class="ti" x="250" y="476" text-anchor="middle">TTA × 7 variants</text>
+        <text class="sub" x="250" y="496" text-anchor="middle">reverse · jitter · scale · shift</text>
+        <line class="l" x1="250" y1="508" x2="250" y2="536" marker-end="url(#arr)"/>
+        <rect class="b" x="130" y="536" width="240" height="50" rx="2"/>
+        <text class="ti" x="250" y="560" text-anchor="middle">Ensemble mean</text>
+        <text class="sub" x="250" y="578" text-anchor="middle">10 × 7 = 70 probs</text>
+        <line class="l" x1="250" y1="586" x2="250" y2="614" marker-end="url(#arr)"/>
+        <rect class="b" x="130" y="614" width="240" height="50" rx="2"/>
+        <text class="ti" x="250" y="638" text-anchor="middle">Threshold τ = 0.65</text>
+        <text class="sub" x="250" y="656" text-anchor="middle">label ∈ {0, 1}</text>
+      </svg>
+    </div>
+    <div class="right-pane">
+      <p><strong>Two complementary backbones.</strong></p>
+      <ul>
+        <li><strong>CNN-GRU:</strong> recurrent inductive bias, models temporal order via hidden state.</li>
+        <li><strong>Multi-scale TCN:</strong> parallel dilated convolutions covering the full 150-frame window.</li>
+      </ul>
+      <p><strong>5-fold StratifiedGroupKFold</strong> grouped by patient ID — leakage-free.</p>
+      <p><strong>7-variant TTA.</strong></p>
+    </div>
+  </div>
+  <div class="slide-foot"><span>Owoyele et al.&nbsp;·&nbsp;HPI Potsdam</span><span>2026 VSDC, Charité</span></div>
+</div>
+
+<!-- =============== SLIDE 4: METHOD =============== -->
+<div class="slide">
+  <div class="slide-head">
+    <h2 class="slide-title">Method &nbsp;·&nbsp; features, models, training</h2>
+    <span class="slide-num">4 / 7</span>
+  </div>
+  <div class="body two-col">
+    <div>
+      <p><strong>Preprocessing.</strong> Forward/back-fill NaN frames; hip-center; torso-length normalisation. Preserve binary NaN mask as a feature.</p>
+      <p><strong>518-d per-frame features.</strong></p>
+      <table>
+        <thead><tr><th>Component</th><th class="num">Dim.</th></tr></thead>
+        <tbody>
+          <tr><td>Raw landmarks (x,y,z,vis,pres)</td><td class="num">165</td></tr>
+          <tr><td>Velocity / Acceleration / Speed</td><td class="num">231</td></tr>
+          <tr><td>Joint angles (10) · Symmetry (6) · NaN</td><td class="num">17</td></tr>
+          <tr><td>Low-freq FFT power (broadcast)</td><td class="num">105</td></tr>
+          <tr><td><strong>Total</strong></td><td class="num"><strong>518</strong></td></tr>
+        </tbody>
+      </table>
+      <p class="small">FFT bins ≈ 0.2–3 Hz — clonic / myoclonic rhythm at 30 fps over a 5-s window.</p>
+    </div>
+    <div>
+      <p><strong>Training.</strong></p>
+      <ul>
+        <li><strong>Focal loss</strong> α=0.75, γ=2.0 + WeightedRandomSampler.</li>
+        <li><strong>AdamW + OneCycleLR</strong>, max_lr 5×10<sup>-3</sup>, pct_start 0.3.</li>
+        <li>Up to 120 epochs, early stop on val F<sub>1</sub> (patience 25).</li>
+        <li><strong>Augmentation:</strong> reverse, jitter, time-resample, frame dropout, same-class mixup.</li>
+      </ul>
+      <p><strong>Inference.</strong> 10 models × 7 TTA variants = 70 forward passes / sample, mean probability, threshold τ = 0.65.</p>
+      <p class="small">Same trained ensemble runs on either pre-extracted .npy or raw .mp4 via the MediaPipe adapter — no retraining.</p>
+    </div>
+  </div>
+  <div class="slide-foot"><span>Owoyele et al.&nbsp;·&nbsp;HPI Potsdam</span><span>2026 VSDC, Charité</span></div>
+</div>
+
+<!-- =============== SLIDE 5: RESULTS =============== -->
+<div class="slide">
+  <div class="slide-head">
+    <h2 class="slide-title">Results &nbsp;·&nbsp; cross-validation and held-out test</h2>
+    <span class="slide-num">5 / 7</span>
+  </div>
+  <div class="body two-col">
+    <div>
+      <p><strong>5-fold CV on the training partition.</strong></p>
+      <table>
+        <thead>
+          <tr><th>Fold</th><th class="num">CNN-GRU F<sub>1</sub></th><th class="num">τ̂</th><th class="num">TCN F<sub>1</sub></th><th class="num">τ̂</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>0</td><td class="num">0.633</td><td class="num">0.70</td><td class="num">0.611</td><td class="num">0.63</td></tr>
+          <tr><td>1</td><td class="num">0.615</td><td class="num">0.59</td><td class="num">0.608</td><td class="num">0.61</td></tr>
+          <tr><td>2</td><td class="num">0.629</td><td class="num">0.64</td><td class="num">0.635</td><td class="num">0.33</td></tr>
+          <tr><td>3</td><td class="num">0.575</td><td class="num">0.28</td><td class="num">0.627</td><td class="num">0.25</td></tr>
+          <tr><td>4</td><td class="num">0.691</td><td class="num">0.51</td><td class="num">0.694</td><td class="num">0.39</td></tr>
+          <tr><td><strong>Mean</strong></td><td class="num"><strong>0.628</strong></td><td class="num">0.54</td><td class="num"><strong>0.635</strong></td><td class="num">0.44</td></tr>
+        </tbody>
+      </table>
+      <p class="small">Per-fold thresholds span [0.25, 0.70] — different operating points on the precision–recall curve; ensemble exploits this.</p>
+    </div>
+    <div>
+      <p><strong>Held-out leaderboard.</strong></p>
+      <table>
+        <thead>
+          <tr><th>Rank</th><th>Team</th><th class="num">F<sub>1</sub></th></tr>
+        </thead>
+        <tbody>
+          <tr><td>1</td><td>Kramer (BU/JHU)</td><td class="num">0.4502</td></tr>
+          <tr><td>2</td><td>Ramesh (NIT)</td><td class="num">0.4286</td></tr>
+          <tr><td>3</td><td>Daraie (JHU)</td><td class="num">0.4048</td></tr>
+          <tr><td>4</td><td>Walsh (Penn)</td><td class="num">0.3984</td></tr>
+          <tr><td>5</td><td>Hazra (IIT KGP)</td><td class="num">0.3923</td></tr>
+          <tr><td>⋮</td><td>⋮</td><td class="num">⋮</td></tr>
+          <tr class="ours"><td>19</td><td>Owoyele et al. (HPI)</td><td class="num">0.2975</td></tr>
+        </tbody>
+      </table>
+      <p class="small">26 valid submissions, no entry exceeds F<sub>1</sub> 0.5. Compressed leaderboard — task is genuinely hard.</p>
+    </div>
+  </div>
+  <div class="slide-foot"><span>Owoyele et al.&nbsp;·&nbsp;HPI Potsdam</span><span>2026 VSDC, Charité</span></div>
+</div>
+
+<!-- =============== SLIDE 6: DISCUSSION =============== -->
+<div class="slide">
+  <div class="slide-head">
+    <h2 class="slide-title">Discussion &nbsp;·&nbsp; CV F<sub>1</sub> 0.63 → test F<sub>1</sub> 0.30</h2>
+    <span class="slide-num">6 / 7</span>
+  </div>
+  <div class="body">
+    <div class="lead">Five plausible contributors, ordered roughly by expected effect size:</div>
+    <ul>
+      <li><strong>Distribution shift</strong> between training-pool and test-pool patients. Grouped CV controls leakage but <em>not</em> pool-level shift.</li>
+      <li><strong>Threshold over-fit to CV.</strong> Per-fold τ̂ spans [0.25, 0.70]; the single τ = 0.65 we ship is over-fit to a small CV sample.</li>
+      <li><strong>F<sub>1</sub> brittleness</strong> under strong class imbalance — small precision / recall shifts move F<sub>1</sub> a lot.</li>
+      <li><strong>Train / TTA augmentation mismatch.</strong> Aggressive training augmentation, near-identity TTA — the model is trained to tolerate perturbations the TTA does not produce.</li>
+      <li><strong>Architectural mismatch.</strong> Full-window attention pools 5 s; spasms concentrate in 1–3 s sub-windows. MIL-style sub-window pooling (used by top entries) is a better structural prior.</li>
+    </ul>
+    <p><strong>Concrete next actions:</strong> (i) hold out a fold for threshold calibration; (ii) refactor inference around MIL sub-window pooling.</p>
+  </div>
+  <div class="slide-foot"><span>Owoyele et al.&nbsp;·&nbsp;HPI Potsdam</span><span>2026 VSDC, Charité</span></div>
+</div>
+
+<!-- =============== SLIDE 7: FUTURE / THANKS =============== -->
+<div class="slide">
+  <div class="slide-head">
+    <h2 class="slide-title">Future work &nbsp;·&nbsp; thanks</h2>
+    <span class="slide-num">7 / 7</span>
+  </div>
+  <div class="body two-col">
+    <div>
+      <p><strong>Future work.</strong></p>
+      <ul>
+        <li><strong>MeTRAbs</strong> pose front-end — metric-scale 3-D, 87 joints (hand + head detail MediaPipe lacks).</li>
+        <li><strong>Multi-view triangulation</strong> via markerless dynamic extrinsic calibration — fuse synchronised views.</li>
+        <li><strong>MIL sub-window pooling</strong> matched to spasm duration.</li>
+        <li><strong>MaskAnyone</strong> integration — on-device home-video processing; only landmarks + label leave the premises.</li>
+        <li><strong>Calibrated probabilities</strong> for cost-sensitive clinical triage.</li>
+      </ul>
+    </div>
+    <div>
+      <p><strong>Thanks.</strong></p>
+      <p>Section on Computational Neurology, Charité — Universitätsmedizin Berlin, and the organising committee of the 2026 Int. Conf. on AI in Epilepsy and Other Neurological Disorders, for hosting the challenge and releasing the dataset.</p>
+      <p><strong>Funding.</strong></p>
+      <p class="small">Federal Ministry of Research, Technology and Space — "KI-Servicezentrum Berlin-Brandenburg" (16IS22092). Responsibility for the content remains with the authors.</p>
+      <p><strong>Contact.</strong></p>
+      <p class="small">babajide.owoyele@hpi.de &nbsp;·&nbsp; <span class="mono">github.com/babowoyele/seizure-detection</span></p>
+    </div>
+  </div>
+  <div class="slide-foot"><span>Owoyele et al.&nbsp;·&nbsp;HPI Potsdam</span><span>Thank you</span></div>
+</div>
+
+</body>
+</html>

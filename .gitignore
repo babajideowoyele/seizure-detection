@@ -1,3 +1,6 @@
 __pycache__/
 *.pyc
 *.pyo
+
+# MediaPipe pose model — download per README, do not commit
+models/*.task

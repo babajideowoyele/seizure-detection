@@ -7,6 +7,7 @@ class Config:
     # Paths
     train_data_dir: Path = Path("../video-based-seizure-detection-challenge-main/video-based-seizure-detection-challenge-main/train_data")
     model_dir: Path = Path("./checkpoints")
+    mediapipe_model_path: Path = Path("./models/pose_landmarker.task")
 
     # Data shape constants
     n_frames: int = 150

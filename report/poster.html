@@ -1,0 +1,484 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Video-Based Pediatric Seizure Detection — Conference Poster</title>
+<style>
+  @page {
+    size: 841mm 1189mm;
+    margin: 0;
+  }
+
+  :root {
+    --bg: #fdfcf8;
+    --ink: #111111;
+    --muted: #555555;
+    --accent: #1a3a52;
+    --rule: #000000;
+    --serif: "Charter", "Cambria", "Palatino Linotype", "Palatino", "Georgia", serif;
+    --sans: "Helvetica Neue", "Arial", sans-serif;
+  }
+
+  * { box-sizing: border-box; }
+
+  html, body {
+    margin: 0;
+    padding: 0;
+    background: var(--bg);
+    color: var(--ink);
+    font-family: var(--serif);
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+  }
+
+  .poster {
+    width: 841mm;
+    height: 1189mm;
+    padding: 28mm 32mm 28mm 32mm;
+    background: var(--bg);
+    display: grid;
+    grid-template-rows: auto auto 1fr auto;
+    row-gap: 14mm;
+  }
+
+  /* --- Header --- */
+  header {
+    border-bottom: 3pt solid var(--rule);
+    padding-bottom: 10mm;
+  }
+
+  h1.title {
+    font-family: var(--serif);
+    font-style: italic;
+    font-weight: normal;
+    font-size: 88pt;
+    line-height: 1.05;
+    margin: 0 0 6mm 0;
+  }
+
+  h1.title em {
+    font-style: normal;
+  }
+
+  .subtitle {
+    font-family: var(--serif);
+    font-style: italic;
+    font-size: 30pt;
+    color: var(--muted);
+    margin: 0 0 10mm 0;
+    line-height: 1.2;
+  }
+
+  .meta {
+    display: grid;
+    grid-template-columns: 1.6fr 1fr;
+    gap: 10mm;
+    align-items: end;
+    font-size: 22pt;
+  }
+
+  .authors { font-size: 24pt; line-height: 1.35; }
+  .authors strong { font-weight: 600; }
+  .affil { font-style: italic; color: var(--muted); margin-top: 2mm; }
+
+  .venue { text-align: right; font-style: italic; color: var(--muted); line-height: 1.35; }
+  .venue strong { color: var(--ink); font-style: normal; font-weight: 600; }
+
+  /* --- Subhead --- */
+  .subhead {
+    font-family: var(--serif);
+    font-style: italic;
+    font-size: 26pt;
+    color: var(--muted);
+    line-height: 1.35;
+    text-align: justify;
+  }
+
+  /* --- Three-column body --- */
+  .columns {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 14mm;
+    align-items: start;
+  }
+
+  .col { display: flex; flex-direction: column; gap: 9mm; }
+
+  section.block {
+    break-inside: avoid;
+  }
+
+  h2 {
+    font-family: var(--serif);
+    font-style: italic;
+    font-weight: normal;
+    font-size: 36pt;
+    margin: 0 0 4mm 0;
+    line-height: 1.15;
+    border-bottom: 1pt solid var(--rule);
+    padding-bottom: 2mm;
+  }
+
+  p, li {
+    font-family: var(--serif);
+    font-size: 19pt;
+    line-height: 1.42;
+    margin: 0 0 5mm 0;
+    text-align: justify;
+    hyphens: auto;
+  }
+
+  ul, ol { margin: 0 0 5mm 0; padding-left: 8mm; }
+  li { margin: 0 0 3mm 0; text-align: left; }
+
+  strong { font-weight: 600; }
+  em { font-style: italic; }
+
+  .small { font-size: 16pt; color: var(--muted); }
+
+  /* Pipeline figure */
+  figure.pipeline {
+    margin: 0;
+    text-align: center;
+  }
+  figure.pipeline svg {
+    width: 100%;
+    height: auto;
+    display: block;
+  }
+  figure.pipeline figcaption {
+    font-style: italic;
+    color: var(--muted);
+    font-size: 16pt;
+    margin-top: 3mm;
+    text-align: center;
+  }
+
+  /* Tables */
+  table {
+    border-collapse: collapse;
+    width: 100%;
+    font-size: 18pt;
+    margin: 2mm 0 4mm 0;
+    font-variant-numeric: lining-nums tabular-nums;
+  }
+  th, td {
+    border: none;
+    padding: 2.4mm 3mm;
+    text-align: left;
+    vertical-align: baseline;
+  }
+  thead tr {
+    border-top: 1.6pt solid var(--rule);
+    border-bottom: 0.8pt solid var(--rule);
+  }
+  tbody tr:last-child {
+    border-bottom: 1.6pt solid var(--rule);
+  }
+  th { font-style: italic; font-weight: normal; }
+  td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
+  tr.ours td { font-weight: 600; }
+
+  .highlight {
+    background: #ebe7d8;
+    padding: 5mm 6mm;
+    border-left: 4pt solid var(--accent);
+    margin-bottom: 5mm;
+  }
+  .highlight .lead {
+    font-size: 22pt;
+    margin: 0;
+    line-height: 1.3;
+  }
+  .highlight .lead strong { color: var(--accent); }
+
+  /* Footer */
+  footer {
+    border-top: 2pt solid var(--rule);
+    padding-top: 7mm;
+    display: grid;
+    grid-template-columns: 2fr 1fr 1fr;
+    gap: 10mm;
+    font-size: 15pt;
+    color: var(--muted);
+    font-style: italic;
+    line-height: 1.4;
+  }
+  footer strong { color: var(--ink); font-style: normal; font-weight: 600; }
+  footer .right { text-align: right; }
+
+  /* Inline math-ish helpers */
+  .f1 { font-style: italic; }
+  .tau::before { content: "τ"; font-style: normal; }
+</style>
+</head>
+<body>
+<div class="poster">
+
+<!-- ============ HEADER ============ -->
+<header>
+  <h1 class="title">Video-Based Pediatric Seizure Detection<br>from Pose Landmark Sequences</h1>
+  <div class="subtitle">An ensemble of CNN&nbsp;–&nbsp;GRU and Temporal Convolutional Networks with engineered kinematic features &nbsp;·&nbsp; binary detection of infantile spasms (West syndrome) from anonymised MediaPipe Pose</div>
+  <div class="meta">
+    <div>
+      <div class="authors"><strong>Babajide&nbsp;Owoyele</strong>, Sharjeel&nbsp;Shaikh, Wim&nbsp;Pouw, Moritz&nbsp;Schneider, Stefan&nbsp;Konigorski, Gerard&nbsp;de&nbsp;Melo</div>
+      <div class="affil">Hasso Plattner Institute, Universität Potsdam, Germany</div>
+    </div>
+    <div class="venue">
+      <strong>2026 Video-Based Seizure Detection Challenge</strong><br>
+      Section on Computational Neurology, Charité — Universitätsmedizin Berlin<br>
+      Int.&nbsp;Conf.&nbsp;on AI in Epilepsy and Other Neurological Disorders, 2026
+    </div>
+  </div>
+</header>
+
+<!-- ============ SUBHEAD HIGHLIGHT ============ -->
+<div class="highlight">
+  <p class="lead">
+    <strong>Task —</strong> binary detection of infantile spasms from 5-second pose-only segments
+    (150 × 33 × 5 MediaPipe tensors).&nbsp;
+    <strong>Approach —</strong> 5-fold ensemble of CNN-GRU + multi-scale TCN over 518-d
+    engineered features, focal loss, child-grouped cross-validation, 7-variant TTA.&nbsp;
+    <strong>Result —</strong> mean CV F<sub>1</sub> 0.628 / 0.635; held-out test F<sub>1</sub>
+    <strong>0.2975</strong> (rank 19 of 26; top score 0.4502).&nbsp;
+    <strong>Code —</strong> <span style="font-family:Consolas,Menlo,monospace;">github.com/babowoyele/seizure-detection</span>
+  </p>
+</div>
+
+<!-- ============ THREE COLUMNS ============ -->
+<div class="columns">
+
+  <!-- ====== Column 1 ====== -->
+  <div class="col">
+
+    <section class="block">
+      <h2>1.&nbsp; Problem</h2>
+      <p><em>Infantile spasms</em> are the defining seizure type of West syndrome, an age-dependent epileptic encephalopathy with peak onset around six months of life. A spasm is a brief (1–3&nbsp;s) sudden contraction of trunk and limbs — flexor, extensor, or mixed — typically clustered near sleep–wake transitions and frequently first observed by caregivers in home-video.</p>
+      <p>Two constraints shape a deployable system:</p>
+      <ul>
+        <li><strong>Privacy.</strong> Pixel-level video carries identity, room context, and clinical metadata.</li>
+        <li><strong>Long recordings.</strong> Home and clinical recordings span hours to days; raw-pixel pipelines do not scale.</li>
+      </ul>
+      <p>A <em>pose-only</em> intermediate — a few hundred floats per frame, invariant to lighting, clothing, and background — solves both. The 2026 challenge distributes exactly this representation.</p>
+    </section>
+
+    <section class="block">
+      <h2>2.&nbsp; Data</h2>
+      <p>Per-segment files: <strong>(150 frames, 33 landmarks, 5 channels)</strong> — anonymised MediaPipe Pose. Channels per landmark: <em>x, y, z, visibility, presence</em>. Filenames carry a child-ID we exploit for leakage-free grouped cross-validation.</p>
+      <ul>
+        <li>≈5 s at 30 fps per segment.</li>
+        <li>Strong class imbalance toward non-seizure.</li>
+        <li>Frame-level missingness handled with forward/back-fill and an explicit binary mask feature.</li>
+      </ul>
+    </section>
+
+    <section class="block">
+      <h2>3.&nbsp; Preprocessing</h2>
+      <ul>
+        <li><strong>NaN handling.</strong> Forward- then back-fill missing frames; preserve the binary NaN mask as a feature.</li>
+        <li><strong>Hip-centering.</strong> Translate so the mid-hip point (landmarks 23, 24) sits at the origin per frame — translation-invariant.</li>
+        <li><strong>Torso normalisation.</strong> Divide x,y,z by the per-frame mid-shoulder→mid-hip distance — scale-invariant against camera-distance.</li>
+      </ul>
+    </section>
+
+    <section class="block">
+      <h2>4.&nbsp; Features <span class="small">(518 per frame)</span></h2>
+      <table>
+        <thead><tr><th>Component</th><th class="num">Dim.</th></tr></thead>
+        <tbody>
+          <tr><td>Raw landmarks (x,y,z,vis,pres)</td><td class="num">165</td></tr>
+          <tr><td>Velocity (Δxyz)</td><td class="num">99</td></tr>
+          <tr><td>Acceleration (Δ²xyz)</td><td class="num">99</td></tr>
+          <tr><td>Speed magnitude per landmark</td><td class="num">33</td></tr>
+          <tr><td>Joint angles (10 triplets)</td><td class="num">10</td></tr>
+          <tr><td>Left–right symmetry (6 pairs)</td><td class="num">6</td></tr>
+          <tr><td>NaN-frame indicator</td><td class="num">1</td></tr>
+          <tr><td>FFT power (7 lm × 3 axes × 5 bins)</td><td class="num">105</td></tr>
+          <tr><td><strong>Total</strong></td><td class="num"><strong>518</strong></td></tr>
+        </tbody>
+      </table>
+      <p class="small">Spectral bins band-limited to ≈0.2–3 Hz — the rhythmic range of clonic/myoclonic spasm activity at 30 fps over a 5-s window.</p>
+    </section>
+
+  </div>
+
+  <!-- ====== Column 2 ====== -->
+  <div class="col">
+
+    <section class="block">
+      <h2>5.&nbsp; Pipeline</h2>
+      <figure class="pipeline">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 500 690">
+          <defs>
+            <marker id="arr" markerWidth="8" markerHeight="8" refX="6" refY="4" orient="auto" markerUnits="userSpaceOnUse">
+              <path d="M0,0 L0,8 L6,4 z" fill="#222"/>
+            </marker>
+          </defs>
+          <style>
+            .b   { fill:#fff; stroke:#333; stroke-width:1.2; }
+            .ti  { font:italic 16px Charter,Cambria,Palatino,Georgia,serif; fill:#000; }
+            .sub { font: 13px Charter,Cambria,Palatino,Georgia,serif; fill:#555; }
+            .l   { stroke:#333; stroke-width:1.2; fill:none; }
+          </style>
+          <rect class="b" x="40"  y="20"  width="190" height="60" rx="2"/>
+          <text class="ti"  x="135" y="46" text-anchor="middle">.npy (150,33,5)</text>
+          <text class="sub" x="135" y="66" text-anchor="middle">challenge input</text>
+          <text class="ti"  x="250" y="58" text-anchor="middle">or</text>
+          <rect class="b" x="270" y="20"  width="190" height="60" rx="2"/>
+          <text class="ti"  x="365" y="46" text-anchor="middle">raw video</text>
+          <text class="sub" x="365" y="66" text-anchor="middle">MediaPipe adapter</text>
+          <path class="l" d="M135,80 L135,100 L250,100 L250,120" marker-end="url(#arr)"/>
+          <path class="l" d="M365,80 L365,100 L250,100"/>
+          <rect class="b" x="130" y="120" width="240" height="64" rx="2"/>
+          <text class="ti"  x="250" y="144" text-anchor="middle">Preprocess</text>
+          <text class="sub" x="250" y="164" text-anchor="middle">NaN fill · hip-center · torso-normalize</text>
+          <line class="l" x1="250" y1="184" x2="250" y2="212" marker-end="url(#arr)"/>
+          <rect class="b" x="100" y="212" width="300" height="78" rx="2"/>
+          <text class="ti"  x="250" y="236" text-anchor="middle">Features  150 × 518</text>
+          <text class="sub" x="250" y="256" text-anchor="middle">raw · velocity · acceleration · speed</text>
+          <text class="sub" x="250" y="272" text-anchor="middle">joint angles · symmetry · NaN flag</text>
+          <text class="sub" x="250" y="288" text-anchor="middle">low-frequency FFT power</text>
+          <path class="l" d="M250,290 L250,312 L130,312 L130,332" marker-end="url(#arr)"/>
+          <path class="l" d="M250,290 L250,312 L370,312 L370,332" marker-end="url(#arr)"/>
+          <rect class="b" x="35"  y="332" width="190" height="76" rx="2"/>
+          <text class="ti"  x="130" y="356" text-anchor="middle">CNN–GRU × 5 folds</text>
+          <text class="sub" x="130" y="376" text-anchor="middle">1D-CNN → BiGRU(2)</text>
+          <text class="sub" x="130" y="392" text-anchor="middle">→ attention → MLP</text>
+          <rect class="b" x="275" y="332" width="190" height="76" rx="2"/>
+          <text class="ti"  x="370" y="356" text-anchor="middle">TCN × 5 folds</text>
+          <text class="sub" x="370" y="376" text-anchor="middle">5 dilated blocks (1→16)</text>
+          <text class="sub" x="370" y="392" text-anchor="middle">→ attention → MLP</text>
+          <path class="l" d="M130,408 L130,430 L250,430 L250,452" marker-end="url(#arr)"/>
+          <path class="l" d="M370,408 L370,430 L250,430"/>
+          <rect class="b" x="130" y="452" width="240" height="56" rx="2"/>
+          <text class="ti"  x="250" y="476" text-anchor="middle">TTA × 7 variants</text>
+          <text class="sub" x="250" y="496" text-anchor="middle">reverse · jitter · scale ±5% · shift ±3</text>
+          <line class="l" x1="250" y1="508" x2="250" y2="536" marker-end="url(#arr)"/>
+          <rect class="b" x="130" y="536" width="240" height="50" rx="2"/>
+          <text class="ti"  x="250" y="560" text-anchor="middle">Ensemble mean</text>
+          <text class="sub" x="250" y="578" text-anchor="middle">average of 10 × 7 = 70 probabilities</text>
+          <line class="l" x1="250" y1="586" x2="250" y2="614" marker-end="url(#arr)"/>
+          <rect class="b" x="130" y="614" width="240" height="50" rx="2"/>
+          <text class="ti"  x="250" y="638" text-anchor="middle">Threshold τ = 0.65</text>
+          <text class="sub" x="250" y="656" text-anchor="middle">label ∈ {0, 1}</text>
+        </svg>
+        <figcaption>End-to-end pipeline. Either pre-extracted .npy arrays or raw video enter a shared preprocessing + feature stage; two architectures are ensembled across 5 folds and 7 TTA variants.</figcaption>
+      </figure>
+    </section>
+
+    <section class="block">
+      <h2>6.&nbsp; Models</h2>
+      <p><strong>CNN-GRU.</strong> Two 1-D conv layers (k=5, k=3) project 518-d → 128 channels, then a 2-layer bidirectional GRU (hidden=128), then learned attention pooling, then a 256→64→1 MLP head.</p>
+      <p><strong>Multi-scale TCN.</strong> Five residual blocks with kernel 3 and dilations {1, 2, 4, 8, 16} — full receptive-field coverage of the 150-frame window — then attention pooling and the same MLP head.</p>
+      <p><strong>Why two.</strong> Recurrent vs.&nbsp;parallel multi-scale inductive biases produce de-correlated errors and different optimal thresholds (see Results).</p>
+    </section>
+
+    <section class="block">
+      <h2>7.&nbsp; Training</h2>
+      <ul>
+        <li><strong>5-fold StratifiedGroupKFold by child-ID</strong> — no within-subject leakage.</li>
+        <li><strong>Focal loss</strong> (α=0.75, γ=2.0) over a class-balanced WeightedRandomSampler.</li>
+        <li><strong>AdamW</strong> + OneCycleLR (max_lr = 5×10<sup>−3</sup>, pct_start = 0.3).</li>
+        <li>Up to 120 epochs, early stopping on val F<sub>1</sub> (patience 25).</li>
+        <li>Augmentation: time-reverse, jitter, time-resample, frame dropout, same-class mixup.</li>
+      </ul>
+    </section>
+
+  </div>
+
+  <!-- ====== Column 3 ====== -->
+  <div class="col">
+
+    <section class="block">
+      <h2>8.&nbsp; Cross-validation results</h2>
+      <table>
+        <thead>
+          <tr>
+            <th>Fold</th>
+            <th class="num">CNN-GRU F<sub>1</sub></th>
+            <th class="num">τ̂</th>
+            <th class="num">TCN F<sub>1</sub></th>
+            <th class="num">τ̂</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr><td>0</td><td class="num">0.633</td><td class="num">0.70</td><td class="num">0.611</td><td class="num">0.63</td></tr>
+          <tr><td>1</td><td class="num">0.615</td><td class="num">0.59</td><td class="num">0.608</td><td class="num">0.61</td></tr>
+          <tr><td>2</td><td class="num">0.629</td><td class="num">0.64</td><td class="num">0.635</td><td class="num">0.33</td></tr>
+          <tr><td>3</td><td class="num">0.575</td><td class="num">0.28</td><td class="num">0.627</td><td class="num">0.25</td></tr>
+          <tr><td>4</td><td class="num">0.691</td><td class="num">0.51</td><td class="num">0.694</td><td class="num">0.39</td></tr>
+          <tr><td><strong>Mean</strong></td><td class="num"><strong>0.628</strong></td><td class="num">0.54</td><td class="num"><strong>0.635</strong></td><td class="num">0.44</td></tr>
+        </tbody>
+      </table>
+      <p class="small">Per-fold optimal thresholds for CNN-GRU cluster high (0.51–0.70); TCN often low (0.25–0.39). Different operating points on the precision–recall curve — exactly the model diversity an ensemble exploits.</p>
+    </section>
+
+    <section class="block">
+      <h2>9.&nbsp; Held-out leaderboard</h2>
+      <table>
+        <thead>
+          <tr><th>Rank</th><th>Team</th><th class="num">F<sub>1</sub></th><th>Approach</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>1</td><td>Kramer (BU/JHU)</td><td class="num">0.4502</td><td>Two-step likelihood + classifier</td></tr>
+          <tr><td>2</td><td>Ramesh (NIT Tiruchirappalli)</td><td class="num">0.4286</td><td>1D-CNN + LightGBM</td></tr>
+          <tr><td>3</td><td>Daraie (JHU)</td><td class="num">0.4048</td><td>1D-ResNet + XGBoost</td></tr>
+          <tr><td>4</td><td>Walsh (Penn)</td><td class="num">0.3984</td><td>GCN + bidirectional GRU</td></tr>
+          <tr><td>5</td><td>Hazra (IIT Kharagpur)</td><td class="num">0.3923</td><td>ST-GCN + attention-MIL ensemble</td></tr>
+          <tr><td>⋮</td><td>⋮</td><td class="num">⋮</td><td>⋮</td></tr>
+          <tr class="ours"><td>19</td><td>Owoyele et al. (HPI, this work)</td><td class="num">0.2975</td><td>CNN-GRU + TCN ensemble</td></tr>
+        </tbody>
+      </table>
+      <p class="small">26 valid submissions; no entry exceeded F<sub>1</sub> 0.5. The leaderboard is compressed: rank 1 to rank 10 spans &lt;12 percentage points.</p>
+    </section>
+
+    <section class="block">
+      <h2>10.&nbsp; Discussion — the CV→test gap</h2>
+      <p>Cross-validation F<sub>1</sub> ≈ 0.63 → held-out 0.2975 is a substantial gap. Five plausible contributors:</p>
+      <ul>
+        <li><strong>Distribution shift</strong> between training-pool and test-pool patients; grouped CV controls leakage but not pool shift.</li>
+        <li><strong>Threshold over-fit</strong> to CV folds — per-fold τ̂ spans [0.25, 0.70].</li>
+        <li><strong>F<sub>1</sub> brittleness</strong> under strong imbalance.</li>
+        <li><strong>Train/test TTA mismatch</strong>: aggressive train augmentation, near-identity TTA.</li>
+        <li><strong>Architectural mismatch</strong>: full-window attention may under-exploit the sub-second concentration of spasm motor energy that explicit MIL pooling captures.</li>
+      </ul>
+    </section>
+
+    <section class="block">
+      <h2>11.&nbsp; Future work</h2>
+      <ul>
+        <li><strong>MeTRAbs</strong> as pose front-end: metric-scale, 87-joint 3-D coordinates exposing hand and head dynamics.</li>
+        <li><strong>Multi-view triangulation</strong> via markerless dynamic extrinsic calibration [1] — fuse synchronised views, remove occlusion failure modes.</li>
+        <li><strong>MIL-style sub-window pooling</strong> matched to 1–3 s spasm duration.</li>
+        <li><strong>Held-out fold for threshold calibration</strong> (rather than CV-direct).</li>
+        <li><strong>Integration with MaskAnyone</strong> [2] — caregiver home-video processed entirely on-device; only landmarks and labels leave the premises.</li>
+      </ul>
+    </section>
+
+  </div>
+
+</div>
+
+<!-- ============ FOOTER ============ -->
+<footer>
+  <div>
+    <strong>References (selected).</strong>
+    [1]&nbsp;de la Place, F.&nbsp;<em>Dynamic Extrinsic Camera Calibrator</em>, github.com/flodelaplace/lab-camera-dynamic-calibrator.&nbsp;
+    [2]&nbsp;Owoyele&nbsp;et&nbsp;al.&nbsp;(2024). <em>MaskAnyone Toolkit</em>, ICIS 2024.&nbsp;
+    Full bibliography in the accompanying paper.
+  </div>
+  <div>
+    <strong>Contact.</strong><br>
+    babajide.owoyele@hpi.de<br>
+    Hasso Plattner Institute, Potsdam
+  </div>
+  <div class="right">
+    <strong>Funding.</strong><br>
+    Federal Ministry of Research, Technology and Space —<br>
+    "KI-Servicezentrum Berlin-Brandenburg" (16IS22092).
+  </div>
+</footer>
+
+</div>
+</body>
+</html>

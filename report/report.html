@@ -1,0 +1,1308 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml" lang="" xml:lang="">
+<head>
+  <meta charset="utf-8" />
+  <meta name="generator" content="pandoc" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes" />
+  <title>Video-Based Pediatric Seizure Detection from Pose Landmark Sequences</title>
+  <style>
+    /* Default styles provided by pandoc.
+    ** See https://pandoc.org/MANUAL.html#variables-for-html for config info.
+    */
+    code{white-space: pre-wrap;}
+    span.smallcaps{font-variant: small-caps;}
+    div.columns{display: flex; gap: min(4vw, 1.5em);}
+    div.column{flex: auto; overflow-x: auto;}
+    div.hanging-indent{margin-left: 1.5em; text-indent: -1.5em;}
+    /* The extra [class] is a hack that increases specificity enough to
+       override a similar rule in reveal.js */
+    ul.task-list[class]{list-style: none;}
+    ul.task-list li input[type="checkbox"] {
+      font-size: inherit;
+      width: 0.8em;
+      margin: 0 0.8em 0.2em -1.6em;
+      vertical-align: middle;
+    }
+  </style>
+  <link rel="stylesheet" href="style.css" />
+  <script
+  src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-chtml-full.js"
+  type="text/javascript"></script>
+</head>
+<body>
+<header id="title-block-header">
+<h1 class="title">Video-Based Pediatric Seizure Detection from Pose
+Landmark Sequences</h1>
+</header>
+<h1
+id="video-based-pediatric-seizure-detection-from-pose-landmark-sequences">Video-Based
+Pediatric Seizure Detection from Pose Landmark Sequences</h1>
+<p><strong>An Ensemble of CNN-GRU and Temporal Convolutional Networks
+with Engineered Kinematic Features</strong></p>
+<p>Babajide Owoyele, Sharjeel Shaikh, Wim Pouw, Moritz Schneider, Stefan
+Konigorski, Gerard de Melo</p>
+<p><em>Hasso Plattner Institute, Universität Potsdam, Germany</em></p>
+<hr />
+<h2 id="abstract">Abstract</h2>
+<p>We address binary detection of <em>infantile spasms</em> — the
+defining seizure type of West syndrome — from short, pose-only video
+segments of pediatric subjects. Each input is a <span
+class="math inline">\(150 \times 33 \times 5\)</span> tensor of
+MediaPipe Pose landmarks (≈5 s at 30 fps; 33 body landmarks;
+per-landmark <span class="math inline">\(x,y,z\)</span> coordinates plus
+visibility and presence scores). The pose-only representation preserves
+patient privacy while retaining the kinematic information clinicians use
+to recognize a spasm event. The work was prepared as an entry to the
+2026 <em>Video-Based Seizure Detection Challenge</em>, organized by the
+Section on Computational Neurology at Charité — Universitätsmedizin
+Berlin in collaboration with the International Conference on Artificial
+Intelligence in Epilepsy and Other Neurological Disorders.</p>
+<p>Our pipeline combines (i) landmark-level preprocessing that handles
+missing frames and normalizes body scale, (ii) a 518-dimensional
+per-frame feature vector aggregating raw landmarks, velocity,
+acceleration, joint angles, left–right symmetry distances, and
+low-frequency spectral power, (iii) a 5-fold ensemble of two
+complementary temporal architectures — a CNN-frontend with a
+bidirectional GRU and attention pooling, and a multi-scale Temporal
+Convolutional Network (TCN) — trained with focal loss, weighted
+sampling, and on-the-fly augmentation under a child-grouped
+cross-validation scheme, and (iv) a test-time-augmented inference path
+with a tuned ensemble decision threshold.</p>
+<p>On 5-fold <code>StratifiedGroupKFold</code> cross-validation against
+the training partition, the CNN-GRU achieves a mean <span
+class="math inline">\(F_1\)</span> of <strong>0.628</strong> and the TCN
+<strong>0.635</strong>. The combined ensemble, evaluated on the held-out
+challenge test set, attained an <span class="math inline">\(F_1\)</span>
+of <strong>0.2975</strong> — ranking 19th of 26 submissions, against a
+top score of 0.4502. We discuss this generalization gap candidly,
+describe a video-to-features front-end that lets the same trained models
+run on raw video, and outline extensions: replacing MediaPipe with the
+metric-scale, 87-joint MeTRAbs pose estimator, a multi-view calibration
+path adapted from recent work on markerless dynamic extrinsic
+calibration, and integration with related work on privacy-preserving
+de-identification developed in our group [29].</p>
+<hr />
+<h2 id="introduction">1. Introduction</h2>
+<p><em>Infantile spasms</em> are the defining seizure type of West
+syndrome — an age-dependent epileptic encephalopathy that typically
+presents between 3 and 24 months of life and carries a high risk of
+long-term neurodevelopmental morbidity if treatment is delayed [1,5].
+The dominant motor pattern is a brief, sudden, axially-symmetric
+contraction (flexor, extensor, or mixed) lasting 1–3 seconds, often
+occurring in clusters. Early identification matters: time-to-treatment
+is a strong predictor of cognitive outcome, and home-video evaluation by
+epileptologists is an established part of the diagnostic pathway
+[21].</p>
+<p>Two practical constraints shape any deployable detection system:
+privacy and robustness to long recordings. Raw pixel-level video makes
+both hard — infants are identifiable, and pixel-level models are
+expensive. A pose-only intermediate representation collapses each frame
+to a few hundred numbers, removes pixel-level identity, and is
+approximately invariant to clothing, lighting, and background. The 2026
+<em>Video-Based Seizure Detection Challenge</em>, organized by the
+Section on Computational Neurology at Charité — Universitätsmedizin
+Berlin in collaboration with the International Conference on Artificial
+Intelligence in Epilepsy and Other Neurological Disorders, distributes
+exactly this representation: per-segment NumPy arrays of anonymized
+MediaPipe Pose landmarks extracted from clinical home-video recordings
+of pediatric subjects [4].</p>
+<p>In this work we describe a complete pipeline that takes pre-extracted
+pose tensors as input and produces a binary infantile-spasm label per
+segment. The system was developed for the competition’s Docker-based
+evaluation harness, reached a mean validation <span
+class="math inline">\(F_1 \approx 0.63\)</span> under child-grouped
+cross-validation on the training partition, achieved <span
+class="math inline">\(F_1 = 0.2975\)</span> on the held-out test set
+(rank 19 of 26 submissions), and has been extended with a video
+front-end so the same trained models can be applied to raw clinical
+recordings without retraining.</p>
+<h3 id="contributions">Contributions</h3>
+<ul>
+<li>A reproducible end-to-end pipeline — preprocessing, feature
+extraction, training, inference — specialized for short pose-only
+sequences with strong class imbalance and small-subject leakage
+risk.</li>
+<li>A two-architecture ensemble (CNN-GRU + multi-scale TCN) that
+measurably outperforms either model alone at the operating threshold,
+with per-fold thresholds tuned for <span
+class="math inline">\(F_1\)</span>.</li>
+<li>Subject-grouped cross-validation (<code>StratifiedGroupKFold</code>)
+by patient identity to prevent same-child leakage between train and
+validation splits.</li>
+<li>A 7-variant test-time-augmentation scheme tailored to fixed-length
+temporal sequences, applied at the per-fold and per-model levels and
+averaged.</li>
+<li>A video-to-features adapter so the trained ensemble can be evaluated
+on raw <code>.mp4</code> input without retraining.</li>
+</ul>
+<h2 id="background">2. Background</h2>
+<h3 id="infantile-spasms-and-west-syndrome">2.1 Infantile spasms and
+West syndrome</h3>
+<p>The challenge target is <em>infantile spasms</em>, the defining
+seizure type of West syndrome [6]. Onset typically falls between 3 and
+24 months of age, with a peak around 6 months. The triad classically
+associated with West syndrome is: infantile spasms, the hypsarrhythmia
+EEG pattern, and developmental regression or arrest. Roughly 1 in 2 000
+to 4 000 children is affected.</p>
+<p>The motor signature of an infantile spasm is short, sudden, and often
+clustered. A single spasm lasts 1–3 seconds and consists of a brief
+contraction of the trunk and limbs that can be predominantly
+<em>flexor</em> (a forward jackknife with head, arms and legs flexed),
+<em>extensor</em> (sudden extension of the trunk and limbs, sometimes
+resembling startle), or <em>mixed</em>. Single spasms are easy to miss
+on bedside observation; characteristically they occur in clusters of
+dozens, often near sleep–wake transitions. Home-video review by an
+epileptologist is part of the standard diagnostic pathway because the
+spasms are short, intermittent, and frequently first observed by
+caregivers rather than clinicians.</p>
+<p>Two properties of infantile-spasm semiology shape the detection
+problem. First, the relevant signal is on the order of seconds —
+well-matched to the 5-second window of the challenge. Second, motor
+energy is <em>concentrated</em> in time: in a 5-second window containing
+a spasm, the spasm itself may occupy less than half the window, with the
+rest being baseline activity or post-ictal quiescence. This places
+attention pooling at a structural advantage over simple averaging across
+the temporal dimension.</p>
+<h3 id="pediatric-epilepsy-and-seizure-semiology-more-broadly">2.2
+Pediatric epilepsy and seizure semiology more broadly</h3>
+<p>Epilepsy is among the most common neurological disorders of
+childhood, with a cumulative incidence of approximately 1% by
+adolescence [1]. Roughly one in three patients is
+<em>drug-resistant</em> — seizures persist despite appropriate trials of
+two or more antiseizure medications — and accurate diagnosis of the
+seizure type and focus is the gate to advanced treatment options
+including epilepsy surgery, dietary therapy, and neuromodulation
+[5].</p>
+<p>The International League Against Epilepsy classifies seizures by
+onset (focal, generalized, unknown) and by their dominant motor and
+non-motor manifestations [6]. The motor manifestations most amenable to
+video- or pose-based detection include:</p>
+<ul>
+<li><strong>Tonic-clonic seizures.</strong> A tonic phase (sustained
+muscle contraction, often with loss of posture) is followed by clonic
+phase (bilateral rhythmic jerking at approximately 0.5–3 Hz that slows
+as the seizure progresses).</li>
+<li><strong>Clonic and myoclonic seizures.</strong> Rhythmic (clonic) or
+brief, shock-like (myoclonic) jerks, often unilateral.</li>
+<li><strong>Tonic seizures.</strong> Sustained increase in muscle tone;
+characteristic posturing, sometimes asymmetric.</li>
+<li><strong>Atonic seizures.</strong> Sudden loss of postural tone;
+head-drops and falls are typical.</li>
+<li><strong>Hyperkinetic seizures.</strong> Complex, rapid, often
+bilateral movements involving limbs and trunk.</li>
+<li><strong>Automatisms.</strong> Coordinated, repetitive movements
+(lip-smacking, picking at clothes, repetitive limb movements) most often
+associated with focal impaired-awareness seizures of temporal-lobe
+origin.</li>
+</ul>
+<p>These motor signatures span a wide range of spatial and temporal
+scales — from sub-second myoclonic jerks to multi-minute hyperkinetic
+episodes — but several common features fall within the bandlimited
+rhythmic range (0.2–3 Hz) targeted by the spectral component of our
+feature representation.</p>
+<h3 id="epilepsy-monitoring-units-and-the-role-of-video">2.3 Epilepsy
+monitoring units and the role of video</h3>
+<p>Long-term video-EEG monitoring in an EMU is the clinical gold
+standard for characterizing seizure type, lateralization, and (in
+surgical candidates) the focus of seizure onset [1,2]. Patients are
+admitted for periods of days to weeks; video and scalp EEG are recorded
+continuously. The clinical bottleneck is then <em>review</em>: an
+epileptologist or trained technician scrubs through tens to hundreds of
+hours of footage per admission, flagging candidate events for detailed
+analysis. Automated screening — a triage layer that flags suspicious
+time windows for human review — has been studied for several decades
+[3,7] and is an active commercial and academic area.</p>
+<h3 id="the-case-for-pose-only-detection">2.4 The case for pose-only
+detection</h3>
+<p>A pose representation strips pixel-level identifying content (face,
+room, clothing) and reduces a frame from millions of pixels to a few
+hundred floats. This has three downstream consequences:</p>
+<ul>
+<li><strong>Privacy by construction.</strong> If pose is extracted at
+the bedside, only landmark coordinates leave the patient’s room,
+removing the need to transport or store raw video.</li>
+<li><strong>Computational lightness.</strong> Downstream inference cost
+is dominated by the upstream pose estimator; landmark-input classifiers
+are inexpensive.</li>
+<li><strong>Cross-domain robustness.</strong> Pose representations are
+approximately invariant to clothing, lighting, and background — the
+dominant nuisance variables in clinical recordings.</li>
+</ul>
+<p>The cost is information loss. Subtle facial cues (gaze deviation,
+mouth automatisms), vital signs (color, perspiration), and contextual
+signals (a caregiver’s reaction, alarm sounds) are not in the pose
+stream. This sets a practical ceiling that pure pose-based systems
+cannot exceed without auxiliary modalities.</p>
+<p>Privacy-preserving de-identification of clinical audio-visual
+material is a closely related research direction. The
+<em>MaskAnyone</em> toolkit developed by the same group [34] formalises
+a range of de-identification strategies — segmentation-based body
+masking, face blur, audio scrubbing, and pose-only summarisation —
+explicitly trading utility for privacy across a controlled spectrum. The
+present work sits at the high-privacy end of that spectrum: by accepting
+a pose-only representation as the <em>input</em>, we obtain a detection
+pipeline that never sees pixels and is therefore composable with any
+pose-extraction front-end that satisfies the same anonymisation
+guarantees.</p>
+<h2 id="related-work">3. Related Work</h2>
+<h3 id="skeleton-based-action-recognition">3.1 Skeleton-based action
+recognition</h3>
+<p>Skeleton-based action recognition has matured rapidly since the
+introduction of <em>ST-GCN</em> [8], which formalized the
+spatial-temporal graph convolutional network over the human body
+topology. Subsequent work has refined the topology by learning adaptive
+graph adjacencies (2s-AGCN [9]), introduced multi-scale aggregation
+(MS-G3D [10]), and ultimately revisited the problem with heatmap-volume
+CNNs that often outperform the graph-based family on standard benchmarks
+(PoseConv3D [11]). For longer videos with reliable multi-frame pose,
+this family of architectures is the modern default.</p>
+<p>Our setting is more constrained: short (5 s) clips, a small dataset
+(a few thousand segments, <span
+class="math inline">\(\mathcal{O}(10^2)\)</span> patients), and a single
+binary target. In this regime, simpler 1D-CNN and dilated-convolution
+backbones operating over a per-frame feature vector are competitive with
+graph approaches and substantially easier to train and regularize. The
+trade-off we accept is that body topology must be re-introduced through
+hand-engineered features (joint angles, left–right symmetry distances)
+rather than learned through graph convolutions.</p>
+<h3 id="human-pose-estimation-pipelines">3.2 Human pose estimation
+pipelines</h3>
+<p>A wide ecosystem of pose estimators is available. Single-stage
+bottom-up 2D models such as <em>OpenPose</em> [12] popularised real-time
+multi-person pose. Subsequent work has split along several axes:</p>
+<ul>
+<li><strong>Mobile-optimized</strong>: <em>BlazePose</em> [13], the pose
+estimator behind MediaPipe Pose, returns 33 landmarks per person with
+<span class="math inline">\((x, y, z, \text{visibility},
+\text{presence})\)</span> channels at high frame rates on CPU and mobile
+hardware. The pre-extracted competition data corresponds to this output
+format.</li>
+<li><strong>High-accuracy top-down 2D</strong>: <em>HRNet</em> [14]
+established a high-resolution multi-scale design that remains a strong
+baseline; <em>RTMPose</em> [15] later combined HRNet-style high-res
+features with lightweight transformer decoders for a favorable
+accuracy/latency trade-off.</li>
+<li><strong>2D-to-3D lifting</strong>: <em>VideoPose3D</em> [16] showed
+that temporal convolutional lifting from 2D keypoints to 3D recovers
+consistent skeletons in relative scale.</li>
+<li><strong>Metric-scale single-stage 3D</strong>: <em>MeTRAbs</em> [17]
+returns metric-scale absolute 3D coordinates for 87 body joints from a
+single image — substantially richer than MediaPipe’s 33 landmarks and
+free of the scale ambiguity in relative-3D lifters.</li>
+</ul>
+<p>The trade-off relevant to seizure detection is the joint count and
+metric scale. MediaPipe Pose covers the major body landmarks but
+discards much of the hand and face mesh; MeTRAbs’s 87-joint skeleton
+captures both hands and a denser face / head representation that can be
+informative for automatisms and asymmetric motor seizures.</p>
+<h3 id="automated-seizure-detection">3.3 Automated seizure
+detection</h3>
+<p>Three modalities dominate the automated seizure-detection literature:
+EEG, wearable accelerometers, and video.</p>
+<p>EEG-based detection is the longest-established branch and the
+standard of care in the EMU [3,7]. It operates on the substrate that
+physicians use to confirm seizures but is invasive in the wearable sense
+(scalp electrodes), and many useful seizure events are missed by surface
+EEG in the absence of clear ictal correlates.</p>
+<p>Wearable accelerometers and surface EMG are an active area, with both
+academic and commercial systems (e.g., wrist-worn devices) targeting
+generalized tonic-clonic seizures, the type with the highest mortality
+risk [18,19]. These approaches are practical for at-home monitoring but
+capture only the wearer’s limb dynamics and underperform on non-motor
+seizure types.</p>
+<p>Video-based detection has been studied for at least two decades.
+Early work by Karayiannis and colleagues [3] targeted neonatal seizures
+with motion descriptors and classical machine learning. Optical-flow
+approaches such as Cuppens et al. [20] focused on nocturnal pediatric
+monitoring. More recent work by Geertsema et al. [21] demonstrated
+automated overnight detection of generalized tonic-clonic seizures in a
+residential care setting using bedside cameras and explicit motion
+features. Pose-based systems specifically, especially for pediatric
+populations, are a younger thread; the present work falls in that
+area.</p>
+<h3 id="temporal-sequence-models">3.4 Temporal sequence models</h3>
+<p>The deep-learning toolbox for sequence classification has converged
+on three families. Recurrent networks — LSTMs [22] and GRUs [23] —
+process sequences strictly sequentially and propagate state through
+time; they remain competitive on short sequences where a long-range
+receptive field is unnecessary. Temporal convolutional networks [24] use
+stacked dilated convolutions to achieve arbitrary receptive-field sizes
+with parallelism and explicit control over the temporal context.
+Transformers [25] dominate long-range sequence modeling at scale but are
+data-hungry and overfit aggressively on the size of dataset we work
+with.</p>
+<p>Our two-architecture ensemble pairs a GRU-based recurrent model with
+a TCN, deliberately using two architectures with different inductive
+biases. This is a common motif in skeleton-action recognition (e.g.,
+two-stream and four-stream ensembles [9]) and trades a small increase in
+inference cost for measurable robustness gains on small data.</p>
+<h3 id="class-imbalance-augmentation-and-test-time-augmentation">3.5
+Class imbalance, augmentation, and test-time augmentation</h3>
+<p>Strong class imbalance is the dominant statistical challenge in
+pediatric seizure data: even within a 24-hour EMU recording, ictal
+segments occupy a small fraction of the total. Standard remedies include
+cost-sensitive losses, class-weighted sampling, and synthetic minority
+oversampling. The <em>focal loss</em> of Lin et al. [26] adds an
+explicit difficulty-modulating factor <span class="math inline">\((1 -
+p_t)^\gamma\)</span> to the cross-entropy, down-weighting confident
+examples and concentrating gradient on hard cases; we use it in
+combination with a <code>WeightedRandomSampler</code> that already
+produces approximately balanced batches.</p>
+<p>Data augmentation for fixed-length kinematic sequences is
+conceptually similar to its image counterpart but constrained to
+transformations that preserve label semantics. Mixup [27]
+convex-combines pairs of examples and their labels, has a regularizing
+effect well-studied across modalities, and applies naturally to dense
+feature representations. Same-class mixup, which restricts the partner
+draw to examples of the same label, preserves binary semantics exactly
+at the cost of slightly reduced diversity.</p>
+<p>Test-time augmentation [28] runs the model on multiple stochastic
+perturbations of each test sample and averages the resulting
+probabilities. The technique has well-understood failure modes (e.g.,
+when training- and test-time augmentation distributions disagree) and is
+most effective when the perturbations are mild and label-preserving. Our
+seven-variant TTA scheme combines a strict label-preserving
+transformation (time reversal — valid for non-directional motor
+seizures) with three nearly-identity perturbations (additive jitter, ±5
+% global scaling, small circular time shifts).</p>
+<h3 id="markerless-multi-view-calibration">3.6 Markerless multi-view
+calibration</h3>
+<p>Recent work on dynamic, markerless extrinsic camera calibration [29]
+uses pose-based 3D priors (from MeTRAbs or RTMPose+VideoPose3D) to
+calibrate multi-camera setups from a single walking subject, without
+checkerboards or specialized rigs. This unlocks a path to multi-view,
+metric-scale 3D pose for clinical settings where synchronized cameras
+are available; we return to this direction in Section 9.</p>
+<h2 id="data-and-task">4. Data and Task</h2>
+<p>The challenge provides per-segment files of shape <span
+class="math inline">\((150, 33, 5)\)</span>:</p>
+<table>
+<colgroup>
+<col style="width: 13%" />
+<col style="width: 86%" />
+</colgroup>
+<thead>
+<tr>
+<th>Axis</th>
+<th>Meaning</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Frame</td>
+<td>150 frames per segment (≈5 s at 30 fps)</td>
+</tr>
+<tr>
+<td>Landmark</td>
+<td>33 MediaPipe Pose landmarks (full-body topology)</td>
+</tr>
+<tr>
+<td>Channel</td>
+<td><span class="math inline">\((x, y, z, \text{visibility},
+\text{presence})\)</span></td>
+</tr>
+</tbody>
+</table>
+<p>File names follow <code>child_&lt;id&gt;_&lt;seg&gt;.npy</code>,
+giving us a per-sample patient identifier we exploit for leakage-free
+cross-validation. Labels are binary (<code>1</code> = seizure,
+<code>0</code> = non-seizure) with strong class imbalance toward
+non-seizure samples.</p>
+<p><strong>Missingness.</strong> A non-trivial fraction of frames is
+entirely <code>NaN</code> — these correspond to frames where the
+upstream pose detector failed (subject out of frame, severe occlusion,
+low light). Some segments contain runs of consecutive failed frames; in
+extreme cases an entire segment may be <code>NaN</code>.</p>
+<h2 id="method">5. Method</h2>
+<p>The pipeline has four stages: preprocessing, feature extraction,
+model training, ensemble inference. Figure 1 sketches the end-to-end
+flow; the remainder of this section describes each stage in detail.</p>
+<figure>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 500 690" style="max-width:62%;height:auto;display:block;margin:0.8em auto">
+<defs>
+<marker id="arr" markerWidth="8" markerHeight="8" refX="6" refY="4" orient="auto" markerUnits="userSpaceOnUse">
+<path d="M0,0 L0,8 L6,4 z" fill="#222"/> </marker> </defs> <style> .b {
+fill:#fff; stroke:#333; stroke-width:1.1; } .ti { font:italic 13px
+Charter,Cambria,Palatino,Georgia,serif; fill:#000; } .sub { font: 10.5px
+Charter,Cambria,Palatino,Georgia,serif; fill:#555; } .l { stroke:#333;
+stroke-width:1.1; fill:none; } </style>
+<rect class="b" x="40"  y="20"  width="190" height="60" rx="2"/>
+<text class="ti"  x="135" y="44" text-anchor="middle">.npy
+(150,33,5)</text>
+<text class="sub" x="135" y="62" text-anchor="middle">challenge
+input</text>
+<text class="ti"  x="250" y="56" text-anchor="middle">or</text>
+<rect class="b" x="270" y="20"  width="190" height="60" rx="2"/>
+<text class="ti"  x="365" y="44" text-anchor="middle">raw video</text>
+<text class="sub" x="365" y="62" text-anchor="middle">MediaPipe
+adapter</text>
+<path class="l" d="M135,80 L135,100 L250,100 L250,120" marker-end="url(#arr)"/>
+<path class="l" d="M365,80 L365,100 L250,100"/>
+<rect class="b" x="130" y="120" width="240" height="64" rx="2"/>
+<text class="ti"  x="250" y="142" text-anchor="middle">Preprocess</text>
+<text class="sub" x="250" y="160" text-anchor="middle">NaN
+forward/back-fill</text>
+<text class="sub" x="250" y="176" text-anchor="middle">hip-center ·
+torso-normalize</text>
+<line class="l" x1="250" y1="184" x2="250" y2="212" marker-end="url(#arr)"/>
+<rect class="b" x="100" y="212" width="300" height="78" rx="2"/>
+<text class="ti"  x="250" y="234" text-anchor="middle">Features 150 ×
+518</text> <text class="sub" x="250" y="252" text-anchor="middle">raw ·
+velocity · acceleration · speed</text>
+<text class="sub" x="250" y="266" text-anchor="middle">joint angles ·
+symmetry · NaN flag</text>
+<text class="sub" x="250" y="280" text-anchor="middle">low-frequency FFT
+power</text>
+<path class="l" d="M250,290 L250,312 L130,312 L130,332" marker-end="url(#arr)"/>
+<path class="l" d="M250,290 L250,312 L370,312 L370,332" marker-end="url(#arr)"/>
+<rect class="b" x="35"  y="332" width="190" height="76" rx="2"/>
+<text class="ti"  x="130" y="354" text-anchor="middle">CNN–GRU × 5
+folds</text>
+<text class="sub" x="130" y="372" text-anchor="middle">1D-CNN →
+BiGRU(2)</text> <text class="sub" x="130" y="386" text-anchor="middle">→
+attention → MLP</text>
+<rect class="b" x="275" y="332" width="190" height="76" rx="2"/>
+<text class="ti"  x="370" y="354" text-anchor="middle">TCN × 5
+folds</text> <text class="sub" x="370" y="372" text-anchor="middle">5
+dilated blocks (1→16)</text>
+<text class="sub" x="370" y="386" text-anchor="middle">→ attention →
+MLP</text>
+<path class="l" d="M130,408 L130,430 L250,430 L250,452" marker-end="url(#arr)"/>
+<path class="l" d="M370,408 L370,430 L250,430"/>
+<rect class="b" x="130" y="452" width="240" height="56" rx="2"/>
+<text class="ti"  x="250" y="474" text-anchor="middle">TTA × 7
+variants</text>
+<text class="sub" x="250" y="492" text-anchor="middle">reverse · jitter
+· scale ±5% · shift ±3</text>
+<line class="l" x1="250" y1="508" x2="250" y2="536" marker-end="url(#arr)"/>
+<rect class="b" x="130" y="536" width="240" height="50" rx="2"/>
+<text class="ti"  x="250" y="558" text-anchor="middle">Ensemble
+mean</text>
+<text class="sub" x="250" y="574" text-anchor="middle">average of 10 × 7
+= 70 probabilities</text>
+<line class="l" x1="250" y1="586" x2="250" y2="614" marker-end="url(#arr)"/>
+<rect class="b" x="130" y="614" width="240" height="50" rx="2"/>
+<text class="ti"  x="250" y="636" text-anchor="middle">Threshold τ =
+0.65</text> <text class="sub" x="250" y="652" text-anchor="middle">label
+∈ {0, 1}</text>
+</svg>
+<figcaption style="font-style:italic;color:#555;text-align:center;font-size:0.92em;margin-top:0.2em;">
+Figure 1. End-to-end pipeline. Either the challenge’s pre-extracted
+<code>.npy</code> arrays or raw video (via the MediaPipe adapter) enter
+a common preprocessing and feature-extraction front-end. Two
+architectures process the 150 × 518 feature sequences in parallel; their
+five-fold ensembles are averaged across seven test-time-augmentation
+variants and thresholded.
+</figcaption>
+</figure>
+<h3 id="preprocessing">5.1 Preprocessing</h3>
+<p>Three transformations are applied per sample before any feature
+extraction.</p>
+<ol type="1">
+<li><strong>NaN-frame mask and fill.</strong> A binary per-frame mask
+records which frames had no detected pose. Missing frames are then
+forward-filled from the most recent valid frame, and any leading
+<code>NaN</code>s are backward-filled. If a segment is entirely
+<code>NaN</code>, it is set to zero. The binary mask itself is preserved
+as a feature so the model can learn to discount filled frames.</li>
+<li><strong>Hip-centering.</strong> The 3D coordinates are translated so
+the mid-hip point (mean of MediaPipe landmarks 23 and 24) sits at the
+origin in every frame. This removes camera-translation effects and makes
+the representation translation-invariant per frame.</li>
+<li><strong>Torso-length normalization.</strong> The Euclidean distance
+between mid-shoulder (landmarks 11+12) and mid-hip is computed per
+frame; coordinates are divided by this torso length. A guard replaces
+near-zero or implausibly small values with the median torso length over
+valid frames. This makes the representation approximately
+scale-invariant and removes camera-distance effects.</li>
+</ol>
+<p>Visibility and presence channels are passed through unchanged.</p>
+<h3 id="feature-extraction">5.2 Feature Extraction</h3>
+<p>We engineer a 518-dimensional per-frame feature vector.</p>
+<table>
+<thead>
+<tr>
+<th>Component</th>
+<th style="text-align: right;">Dim.</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Raw landmarks <span
+class="math inline">\((x,y,z,\text{vis},\text{pres})\)</span>
+flattened</td>
+<td style="text-align: right;">165</td>
+</tr>
+<tr>
+<td>Velocity (<span class="math inline">\(\Delta xyz\)</span> per
+landmark)</td>
+<td style="text-align: right;">99</td>
+</tr>
+<tr>
+<td>Acceleration (<span class="math inline">\(\Delta^2 xyz\)</span> per
+landmark)</td>
+<td style="text-align: right;">99</td>
+</tr>
+<tr>
+<td>Per-landmark speed magnitude</td>
+<td style="text-align: right;">33</td>
+</tr>
+<tr>
+<td>Joint angles (10 triplets at elbows, knees, shoulders, hips)</td>
+<td style="text-align: right;">10</td>
+</tr>
+<tr>
+<td>Left–right symmetry distances (6 pairs)</td>
+<td style="text-align: right;">6</td>
+</tr>
+<tr>
+<td>NaN-frame indicator</td>
+<td style="text-align: right;">1</td>
+</tr>
+<tr>
+<td>Low-freq. FFT power, 7 landmarks × 3 axes × 5 bins</td>
+<td style="text-align: right;">105</td>
+</tr>
+<tr>
+<td><strong>Total</strong></td>
+<td style="text-align: right;"><strong>518</strong></td>
+</tr>
+</tbody>
+</table>
+<p><strong>Joint angles.</strong> For a triplet <span
+class="math inline">\((a, b, c)\)</span> of landmark indices with
+positions <span class="math inline">\(p_a(t), p_b(t), p_c(t) \in
+\mathbb{R}^3\)</span> at frame <span class="math inline">\(t\)</span>,
+the joint angle at <span class="math inline">\(b\)</span> is</p>
+<p><span class="math display">\[\theta_{abc}(t) =
+\frac{1}{\pi}\arccos\!\left(\frac{(p_a(t)-p_b(t)) \cdot
+(p_c(t)-p_b(t))}{\Vert p_a(t)-p_b(t)\Vert\, \Vert p_c(t)-p_b(t)\Vert +
+\varepsilon}\right) \in [0, 1].\]</span></p>
+<p>Ten triplets cover both elbows and knees, the shoulder-to-hip trunk
+angle on each side, and a nose-to-shoulder-to-hip head-orientation angle
+on each side.</p>
+<p><strong>Symmetry.</strong> For each of six left–right landmark pairs
+<span class="math inline">\((\ell, r)\)</span> — shoulders, elbows,
+wrists, hips, knees, ankles — the Euclidean distance <span
+class="math inline">\(\Vert p_\ell(t) - p_r(t) \Vert\)</span> is
+recorded. These distances flatten when the body posture is symmetric and
+grow when one side moves independently of the other, providing a direct
+asymmetry signal.</p>
+<p><strong>Spectral features.</strong> The full-FFT power of seven
+kinematic landmarks (wrists, ankles, elbows, nose) is computed per axis
+across the 150-frame window. We retain only the first five non-DC bins
+per channel — bandlimited to the rhythmic frequency range (roughly 0.2–3
+Hz at 30 fps over a 5 s window) in which clonic and myoclonic seizure
+activity typically appears. These global-window features are tiled
+across all frames so the temporal models always have access to the
+segment’s spectral signature.</p>
+<p><strong>Normalization.</strong> Per-feature global mean and standard
+deviation are computed once over the entire training set and persisted
+to disk (<code>feat_mean.npy</code>, <code>feat_std.npy</code>). The
+same statistics normalize features at inference; no batch-statistics
+drift.</p>
+<h3 id="models">5.3 Models</h3>
+<p>We use a two-architecture ensemble. Both share an attention-pooling
+head producing a single segment-level embedding, followed by a small MLP
+classifier.</p>
+<p><strong>CNN-GRU.</strong> Two 1D convolutional layers (kernels 5 and
+3, batch-norm, ReLU, dropout) over the time axis project the 518-dim
+per-frame features to 128 channels. A 2-layer bidirectional GRU then
+processes the <span class="math inline">\(150 \times 128\)</span>
+sequence, producing <span class="math inline">\(150 \times 256\)</span>
+contextualized embeddings. A learned attention layer pools these to a
+single 256-d segment embedding, and a small MLP (<span
+class="math inline">\(256 \to 64 \to 1\)</span>) produces a logit.</p>
+<p><strong>Multi-scale TCN.</strong> Five residual temporal blocks with
+kernel size 3 and exponentially increasing dilations <span
+class="math inline">\(\{1, 2, 4, 8, 16\}\)</span> provide a receptive
+field that covers the entire 150-frame window. Each block has
+batch-norm, dropout, and a residual <span class="math inline">\(1 \times
+1\)</span> projection when channel counts differ. Attention pooling and
+an MLP head mirror the CNN-GRU.</p>
+<p><strong>Attention pooling.</strong> For a sequence of hidden states
+<span class="math inline">\(h_1, \ldots, h_T\)</span>, the attention
+pooling layer learns weight matrices <span
+class="math inline">\(W\)</span> and <span
+class="math inline">\(w\)</span> producing soft weights</p>
+<p><span class="math display">\[\alpha_t = \frac{\exp(w^\top \tanh(W
+h_t))}{\sum_{t&#39;=1}^{T} \exp(w^\top \tanh(W h_{t&#39;}))}, \qquad z =
+\sum_{t=1}^{T} \alpha_t h_t.\]</span></p>
+<p>This is the standard attention-pooling recipe and is differentiable
+end-to-end.</p>
+<p><strong>Why two architectures.</strong> The CNN-GRU has a recurrent
+inductive bias that models temporal order explicitly through
+hidden-state propagation; the TCN computes parallel multi-scale features
+and is easier to optimize on small data. Their errors are de-correlated
+enough that ensembling improves precision–recall trade-off at our
+operating threshold (Section 6).</p>
+<h3 id="training">5.4 Training</h3>
+<p><strong>Cross-validation.</strong> <code>StratifiedGroupKFold</code>
+(<span class="math inline">\(k=5\)</span>) grouped by patient identifier
+(child ID parsed from the filename). This ensures that within-subject
+correlations cannot leak between train and validation, which would
+otherwise inflate apparent performance. Class ratios are preserved at
+the fold level by the stratification component.</p>
+<p><strong>Focal loss.</strong> Following [26], we use</p>
+<p><span class="math display">\[\mathcal{L}_{\text{focal}}(\hat p, y) =
+-\alpha_t (1 - p_t)^\gamma \log p_t, \qquad p_t = \begin{cases} \hat p
+&amp; \text{if } y = 1 \\ 1 - \hat p &amp; \text{if } y = 0 \end{cases},
+\qquad \alpha_t = \begin{cases} \alpha &amp; y=1 \\ 1-\alpha &amp; y=0
+\end{cases}.\]</span></p>
+<p>We set <span class="math inline">\(\alpha=0.75\)</span> (up-weight
+the minority seizure class) and <span
+class="math inline">\(\gamma=2.0\)</span> (down-weight easy examples).
+This works on top of an already-balanced batch produced by
+<code>WeightedRandomSampler</code>.</p>
+<p><strong>Mixup augmentation.</strong> For two same-class training
+samples <span class="math inline">\((x_i, y_i)\)</span> and <span
+class="math inline">\((x_j, y_j)\)</span> with <span
+class="math inline">\(y_i = y_j\)</span>, mixup [27] produces</p>
+<p><span class="math display">\[\tilde x = \lambda x_i + (1-\lambda)
+x_j, \qquad \tilde y = \lambda y_i + (1-\lambda) y_j, \qquad \lambda
+\sim \mathrm{Beta}(\alpha_{\text{mix}},
+\alpha_{\text{mix}}),\]</span></p>
+<p>with <span class="math inline">\(\alpha_{\text{mix}} = 0.2\)</span>
+and an in-class partner sampled at probability 0.3 per training
+step.</p>
+<p><strong>Optimization.</strong> AdamW [30] with initial learning rate
+<span class="math inline">\(5\times 10^{-4}\)</span>, weight decay <span
+class="math inline">\(10^{-4}\)</span>, gradient clipping at norm 1.0.
+The schedule is <code>OneCycleLR</code> [31] with <span
+class="math inline">\(\text{max\_lr} = 10\times\)</span> initial, <span
+class="math inline">\(\text{pct\_start} = 0.3\)</span>, cosine anneal.
+Up to 120 epochs with early stopping on validation <span
+class="math inline">\(F_1\)</span> (patience 25).</p>
+<p><strong>Other augmentations.</strong> On-the-fly per training sample,
+independently of mixup: time-reversal (<span
+class="math inline">\(p{=}0.3\)</span>), additive Gaussian noise (<span
+class="math inline">\(\sigma{=}0.02\)</span>, <span
+class="math inline">\(p{=}0.5\)</span>), time-index resampling (<span
+class="math inline">\(p{=}0.3\)</span>), and random frame dropout (1–14
+frames zeroed, <span class="math inline">\(p{=}0.2\)</span>).</p>
+<p><strong>Per-fold threshold.</strong> After each validation pass we
+grid-search the decision threshold over <span
+class="math inline">\([0.20, 0.80]\)</span> at <span
+class="math inline">\(0.01\)</span> resolution and report <span
+class="math inline">\(F_1\)</span> at the best operating point. The best
+validation <span class="math inline">\(F_1\)</span> across 120 epochs
+and its associated threshold are persisted per fold; the early-stopping
+criterion is also <span class="math inline">\(F_1\)</span> at the
+optimal threshold.</p>
+<h3 id="inference">5.5 Inference</h3>
+<p>At inference each test sample is preprocessed and featurized
+identically to training. We then apply seven test-time augmentations:
+the original, its time-reverse, additive jitter (<span
+class="math inline">\(\sigma{=}0.01\)</span>), uniform scaling by <span
+class="math inline">\(\pm 5\%\)</span>, and circular time shifts by
+<span class="math inline">\(\pm 3\)</span> frames. With <span
+class="math inline">\(M\)</span> ensemble members and <span
+class="math inline">\(V\)</span> TTA variants, the final probability
+is</p>
+<p><span class="math display">\[\bar p(x) = \frac{1}{|M| \cdot |V|}
+\sum_{m \in M} \sum_{v \in V}
+\sigma\bigl(f_m(\phi_v(x))\bigr),\]</span></p>
+<p>where <span class="math inline">\(\phi_v\)</span> is the <span
+class="math inline">\(v\)</span>-th TTA transform, <span
+class="math inline">\(f_m\)</span> is the logit produced by ensemble
+member <span class="math inline">\(m\)</span>, and <span
+class="math inline">\(\sigma\)</span> is the sigmoid. With 10 members (5
+CNN-GRU folds + 5 TCN folds) and 7 variants we average 70 probabilities
+per sample. The final binary label uses a fixed ensemble threshold
+(currently <span class="math inline">\(\tau = 0.65\)</span>, tuned to
+maximize cross-validation <span class="math inline">\(F_1\)</span>
+across folds; the per-fold averaged-threshold fallback is also
+implemented).</p>
+<h2 id="results">6. Results</h2>
+<h3 id="cross-validation-on-the-training-partition">6.1 Cross-validation
+on the training partition</h3>
+<table style="width:100%;">
+<colgroup>
+<col style="width: 17%" />
+<col style="width: 20%" />
+<col style="width: 20%" />
+<col style="width: 20%" />
+<col style="width: 20%" />
+</colgroup>
+<thead>
+<tr>
+<th style="text-align: right;">Fold</th>
+<th style="text-align: right;">CNN-GRU <span
+class="math inline">\(F_1\)</span></th>
+<th style="text-align: right;">CNN-GRU <span
+class="math inline">\(\hat\tau\)</span></th>
+<th style="text-align: right;">TCN <span
+class="math inline">\(F_1\)</span></th>
+<th style="text-align: right;">TCN <span
+class="math inline">\(\hat\tau\)</span></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align: right;">0</td>
+<td style="text-align: right;">0.633</td>
+<td style="text-align: right;">0.70</td>
+<td style="text-align: right;">0.611</td>
+<td style="text-align: right;">0.63</td>
+</tr>
+<tr>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">0.615</td>
+<td style="text-align: right;">0.59</td>
+<td style="text-align: right;">0.608</td>
+<td style="text-align: right;">0.61</td>
+</tr>
+<tr>
+<td style="text-align: right;">2</td>
+<td style="text-align: right;">0.629</td>
+<td style="text-align: right;">0.64</td>
+<td style="text-align: right;">0.635</td>
+<td style="text-align: right;">0.33</td>
+</tr>
+<tr>
+<td style="text-align: right;">3</td>
+<td style="text-align: right;">0.575</td>
+<td style="text-align: right;">0.28</td>
+<td style="text-align: right;">0.627</td>
+<td style="text-align: right;">0.25</td>
+</tr>
+<tr>
+<td style="text-align: right;">4</td>
+<td style="text-align: right;">0.691</td>
+<td style="text-align: right;">0.51</td>
+<td style="text-align: right;">0.694</td>
+<td style="text-align: right;">0.39</td>
+</tr>
+<tr>
+<td style="text-align: right;"><strong>Mean</strong></td>
+<td style="text-align: right;"><strong>0.628</strong></td>
+<td style="text-align: right;">0.54</td>
+<td style="text-align: right;"><strong>0.635</strong></td>
+<td style="text-align: right;">0.44</td>
+</tr>
+</tbody>
+</table>
+<p>Observations:</p>
+<ul>
+<li>The mean <span class="math inline">\(F_1\)</span> of the two
+architectures is comparable (0.628 vs 0.635), but the per-fold
+thresholds differ widely. The CNN-GRU prefers high-precision operating
+points (thresholds 0.51–0.70 on folds 0, 1, 2, 4); the TCN often prefers
+low thresholds (0.25–0.39 on folds 2, 3, 4). The two models occupy
+different points on the precision–recall curve at their respective
+optima — exactly the diversity that motivates an ensemble.</li>
+<li>Fold 3 is materially harder for the CNN-GRU (<span
+class="math inline">\(F_1\)</span> 0.575) than for the TCN (<span
+class="math inline">\(F_1\)</span> 0.627). Fold 4 is the easiest for
+both. The variance suggests a small number of either harder subjects or
+harder seizure morphologies dominates the per-fold metric.</li>
+<li>The combined ensemble operates at <span
+class="math inline">\(\tau{=}0.65\)</span> on averaged probabilities
+across 70 forward passes per sample (10 models × 7 TTA variants).
+De-correlation between architectures plus TTA smoothing produces a
+calibration sharper than either model alone, which is why the operating
+threshold sits at the upper end of the per-fold range.</li>
+</ul>
+<h3 id="held-out-test-set-and-leaderboard">6.2 Held-out test set and
+leaderboard</h3>
+<p>Final evaluation was performed by the challenge organisers on a
+sequestered test partition. Our submission attained <span
+class="math inline">\(F_1 = 0.2975\)</span> on this held-out set,
+placing 19th of 26 valid submissions; sensitivity served as the
+secondary tie-breaker. The top five entries by <span
+class="math inline">\(F_1\)</span> are summarised in Table 2, alongside
+our position for context.</p>
+<table>
+<colgroup>
+<col style="width: 15%" />
+<col style="width: 39%" />
+<col style="width: 18%" />
+<col style="width: 26%" />
+</colgroup>
+<thead>
+<tr>
+<th style="text-align: right;">Rank</th>
+<th>Author / team</th>
+<th style="text-align: right;"><span
+class="math inline">\(F_1\)</span></th>
+<th>Approach</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align: right;">1</td>
+<td>Kramer (BU / JHU)</td>
+<td style="text-align: right;">0.4502</td>
+<td>Two-step likelihood + compact classifier</td>
+</tr>
+<tr>
+<td style="text-align: right;">2</td>
+<td>Ramesh (NIT Tiruchirappalli)</td>
+<td style="text-align: right;">0.4286</td>
+<td>1D-CNN + LightGBM</td>
+</tr>
+<tr>
+<td style="text-align: right;">3</td>
+<td>Daraie (JHU)</td>
+<td style="text-align: right;">0.4048</td>
+<td>Ensemble of 1D-ResNet and XGBoost</td>
+</tr>
+<tr>
+<td style="text-align: right;">4</td>
+<td>Walsh (U. Pennsylvania)</td>
+<td style="text-align: right;">0.3984</td>
+<td>GCN + bidirectional GRU</td>
+</tr>
+<tr>
+<td style="text-align: right;">5</td>
+<td>Hazra (IIT Kharagpur)</td>
+<td style="text-align: right;">0.3923</td>
+<td>ST-GCN with attention-MIL ensemble</td>
+</tr>
+<tr>
+<td style="text-align: right;">…</td>
+<td>…</td>
+<td style="text-align: right;">…</td>
+<td>…</td>
+</tr>
+<tr>
+<td style="text-align: right;"><strong>19</strong></td>
+<td><strong>Owoyele et al. (HPI Potsdam, this work)</strong></td>
+<td style="text-align: right;"><strong>0.2975</strong></td>
+<td><strong>CNN-GRU + TCN ensemble</strong></td>
+</tr>
+</tbody>
+</table>
+<p><em>Table 2. Top five leaderboard entries and the position of the
+present work. Source: official challenge leaderboard, Section on
+Computational Neurology, Charité — Universitätsmedizin Berlin.</em></p>
+<p>Several observations:</p>
+<ul>
+<li>The leaderboard is <em>compressed</em>: the spread from rank 1 to
+rank 19 is roughly 15 percentage points of <span
+class="math inline">\(F_1\)</span>, and the gap from rank 1 to rank 10
+is under 12 points. No submission cleared <span
+class="math inline">\(F_1 = 0.5\)</span>. This is consistent with
+infantile-spasm detection being a genuinely hard problem under the
+dataset and protocol the organisers chose, and with the held-out test
+set containing morphologies under-represented in the training
+partition.</li>
+<li>The top entries cluster around two architectural families: (i)
+two-stage pipelines that produce an interim seizure-likelihood signal
+before a compact classifier (the Kramer entry), and (ii) hybrids of
+gradient-boosted ensembles with deep encoders (Ramesh, Daraie, Haag,
+Pedersen). Graph-convolutional approaches (Walsh, Hazra, Moro) cover the
+middle of the leaderboard. Our dual-architecture deep ensemble most
+closely resembles the graph-convolutional family in spirit (parallel
+temporal encoders + late fusion) without the explicit body-graph
+structure.</li>
+<li>The substantial gap between our cross-validation <span
+class="math inline">\(F_1 \approx 0.63\)</span> and held-out <span
+class="math inline">\(F_1 = 0.2975\)</span> is the dominant signal here
+and is analysed in Section 8.1 below.</li>
+</ul>
+<h2 id="deployment">7. Deployment</h2>
+<p>The same trained ensemble is exposed through two entry points.</p>
+<p><strong>Challenge inference.</strong> <code>main.py</code> is the
+Docker entrypoint. Given a directory of <span
+class="math inline">\((150, 33, 5)\)</span> <code>.npy</code> arrays and
+an output CSV path, it loads the 10-model ensemble, runs the full
+preprocessing–feature–TTA path on every sample, and writes
+<code>segment_name, label</code> pairs. The Docker image is built and
+pushed to GitHub Container Registry by a manual-dispatch GitHub Actions
+workflow.</p>
+<p><strong>Raw-video inference.</strong> A video adapter
+(<code>video_to_features.py</code>) uses MediaPipe Tasks’
+<code>PoseLandmarker</code> in VIDEO mode to convert any
+<code>.mp4</code>, <code>.mov</code>, <code>.avi</code>,
+<code>.mkv</code> or <code>.webm</code> file into the same <span
+class="math inline">\((150, 33, 5)\)</span> array the trained models
+expect. Frames are sampled evenly across the clip; pose-failure frames
+are left as <code>NaN</code> so the existing
+<code>fill_nan_frames</code> preprocessing handles them transparently. A
+second entry point, <code>predict_video.py</code>, exposes a CLI
+accepting either a single video or a directory of mixed
+<code>.npy</code> and video files; the output CSV includes the
+per-sample probability alongside the binary label.</p>
+<p>This decoupling matters in clinical settings: the competition
+delivers pre-extracted pose, but on-site EMU recordings are raw video.
+With the adapter, the same model can be evaluated end-to-end on either
+input format without retraining.</p>
+<h2 id="discussion-and-limitations">8. Discussion and Limitations</h2>
+<h3 id="the-cvtest-generalisation-gap">8.1 The CV–test generalisation
+gap</h3>
+<p>The headline finding is the gap between cross-validation <span
+class="math inline">\(F_1 \approx 0.63\)</span> and held-out <span
+class="math inline">\(F_1 = 0.2975\)</span>. A gap of this magnitude
+warrants a careful audit; the most plausible contributors are:</p>
+<ol type="1">
+<li><strong>Test-set distribution shift.</strong> The training partition
+was extracted from a different collection of patients than the test
+partition. Infantile-spasm morphology varies meaningfully by age, by
+underlying aetiology (genetic, structural, metabolic, idiopathic) and by
+the camera angle and lighting of the parent’s home-video. Even with
+leakage-free patient-grouped cross-validation on the training set, the
+model has no guarantee of generalising across the <em>distribution
+shift</em> between training-pool and test-pool subjects.</li>
+<li><strong>Threshold over-fitting to CV folds.</strong> Per-fold
+optimal thresholds in Table 1 span <span class="math inline">\([0.25,
+0.70]\)</span>, signalling that the model’s probabilities are not
+strongly calibrated. The single ensemble threshold <span
+class="math inline">\(\tau = 0.65\)</span> that maximises mean CV <span
+class="math inline">\(F_1\)</span> may be a poor operating point on the
+test distribution; it would also be over-fit to the small number of
+validation folds. A threshold calibrated on a separate held-out fold
+(rather than on CV directly) would likely transfer better, at the cost
+of a smaller training pool.</li>
+<li><strong>Class-imbalance interaction with <span
+class="math inline">\(F_1\)</span>.</strong> <span
+class="math inline">\(F_1\)</span> on a strongly imbalanced binary task
+can swing materially with small changes in either precision or recall:
+e.g. on a 1:10 imbalanced set, mis-classifying a third of the minority
+class can halve <span class="math inline">\(F_1\)</span> even if overall
+accuracy is high. The leaderboard top score of 0.4502 (and median of
+approximately 0.31) indicates that no entry escaped this regime.</li>
+<li><strong>TTA distribution mismatch.</strong> Test-time augmentation
+assumes the training- and test-time augmentation distributions match.
+The training-time augmentations are aggressive (gaussian noise, frame
+dropout, time-index resampling, mixup); the test-time augmentations are
+nearly identity (jitter, scale ±5%, time shift ±3). The model has been
+trained to be invariant to perturbations that the TTA does not produce —
+meaning the test-time ensemble may not exploit the full robustness the
+training augmentation paid for. Aligning the augmentation suites is a
+non-trivial follow-up.</li>
+<li><strong>Architecture–signal mismatch.</strong> Infantile spasms
+concentrate motor energy in sub-second sub-windows; both our
+architectures pool over the full 5-second window with attention. While
+attention can in principle focus, multiple-instance learning explicitly
+built around 1–2 second proposals — as in the Daraie and Galindo-Lazo
+entries — may be a better structural prior for this specific seizure
+type.</li>
+</ol>
+<p>The most actionable next step, given the audit above, is (1) re-train
+with a held-out fold dedicated to threshold calibration, and (2)
+refactor inference around MIL-style sub-window pooling rather than
+full-window attention.</p>
+<h3 id="pose-only-ceiling">8.2 Pose-only ceiling</h3>
+<p>As argued in Section 2.4, operating purely in pose space is the
+source of both this system’s strengths (privacy, lightness, lighting
+invariance) and its ceiling. Subtle facial cues (gaze deviation,
+automatisms involving small mouth movements), vital signs, and
+contextual information are simply not in the input. Roughly <span
+class="math inline">\(F_1{=}0.63\)</span> on 5-fold CV is consistent
+with a moderate-strength pose-only system on a small, imbalanced
+dataset; closing the remaining gap likely requires either a larger
+labeled dataset or auxiliary modalities.</p>
+<p><strong>MediaPipe is the bottleneck on raw video.</strong> MediaPipe
+Pose returns 33 landmarks in normalized image coordinates; the <span
+class="math inline">\(z\)</span> channel is image-relative and is metric
+only after the torso-normalization step we apply. On low-light,
+partially-occluded, or oblique-angle clinical footage, the detector
+fails more often, and the failure mode is a long run of <code>NaN</code>
+frames that the forward-fill heuristic handles passably but not
+gracefully.</p>
+<p><strong>Patient-grouped CV is conservative but limited.</strong> Five
+folds over a relatively small number of children means each validation
+set may not cover all seizure morphologies. The 5–12 percentage-point
+spread in per-fold <span class="math inline">\(F_1\)</span> in Section 6
+quantifies this. A leave-one-patient-out protocol would give tighter
+bias estimates but at proportional compute cost.</p>
+<p><strong>Threshold sensitivity and operating-point selection.</strong>
+The per-fold optimal thresholds span <span class="math inline">\([0.25,
+0.70]\)</span> — a wide range, signaling that the underlying probability
+distributions are not strongly calibrated and that small shifts in fold
+composition move the optimum substantially. The single ensemble
+threshold <span class="math inline">\(\tau = 0.65\)</span> we report is
+the value that maximizes cross-validation <span
+class="math inline">\(F_1\)</span> across folds; in a deployment with
+cost-sensitive errors (false negatives orders of magnitude costlier than
+false positives, as in clinical screening) this would be moved well
+below 0.5.</p>
+<p><strong>Augmentation correctness.</strong> The current “time-warp”
+augmentation samples 150 indices uniformly at random from the 150-frame
+window and sorts them, which can duplicate frames and drop others; this
+is more of a robustness-injecting perturbation than a true monotone time
+warp. Replacing it with linear resampling at a randomly chosen rate
+would be more faithful to the name.</p>
+<p><strong>FFT broadcast is mildly wasteful.</strong> The 105 spectral
+features are sample-level (one vector per segment) but are tiled across
+all 150 frames so the per-frame temporal models can see them. The CNN
+front-end and TCN can pick out these constants, but a parallel head
+concatenating the spectral vector with the temporal embedding before the
+classifier would be cleaner.</p>
+<h2 id="future-work">9. Future Work</h2>
+<p><strong>MeTRAbs-based metric 3D features.</strong> Replacing the
+MediaPipe frontend with the MeTRAbs estimator [17] would give us
+metric-scale 3D coordinates for 87 body joints (vs. 33 unitless
+MediaPipe landmarks). The downstream feature engineering would update
+modestly — joint-angle triplets, symmetric pairs, and key landmarks for
+the FFT all need to be re-mapped to the new skeleton — but the training
+and ensembling code would be unchanged. We expect this to lift <span
+class="math inline">\(F_1\)</span> for two reasons: richer joints expose
+hand and head dynamics that the 33-landmark MediaPipe topology loses,
+and metric scale removes the need for torso normalization and stabilizes
+velocity- and acceleration-based features against camera-distance
+changes.</p>
+<p><strong>Multi-view triangulated 3D pose.</strong> Recent work on
+markerless, dynamic extrinsic camera calibration [29] shows how a moving
+subject can calibrate a multi-camera setup without checkerboards,
+producing triangulated 3D poses in a common world frame. Adopting that
+pipeline upstream of our classifier would let us fuse views, eliminate
+single-camera occlusion failures, and feed the classifier metric 3D
+directly. The dependency is data-side: it requires synchronized
+multi-camera EMU recordings.</p>
+<p><strong>Temporal-context architectures.</strong> A natural model-side
+step is to replace the global FFT with a learned spectral or Transformer
+head [25], or to use a state-space model (e.g., Mamba [32]) over the
+150-frame window to push the receptive field beyond what the current
+dilated TCN can cleanly cover. The data scale would need to grow to
+support either.</p>
+<p><strong>Calibrated probability output.</strong> The current ensemble
+output is a 70-way average that is not explicitly calibrated. Wrapping
+it in a temperature-scaling or isotonic-regression calibrator on a
+held-out fold [33] would produce probability outputs usable for
+downstream cost-sensitive triage, rather than a single hard label.</p>
+<p><strong>Auxiliary modalities.</strong> The pose-only ceiling can be
+raised by fusing with at least three modalities readily available in
+clinical settings: audio (ictal cry, vocalisation, parental commentary),
+face landmarks (gaze deviation, mouth automatisms — already produced by
+MediaPipe’s face mesh model), and accelerometer streams from wearable
+devices [18,19]. A late-fusion ensemble that weights modalities
+adaptively by their per-fold reliability is a natural next step.</p>
+<p><strong>Integration with the MaskAnyone pipeline.</strong> The
+MaskAnyone toolkit [34] developed in our group offers an end-to-end
+privacy-preserving processing path for clinical audio-visual archives,
+with body masking, face blur, audio scrubbing, and pose-only
+summarisation. A natural next step is to compose this detection model
+with MaskAnyone’s pose-extraction stage so that home-video material
+submitted by caregivers can be processed and classified entirely
+on-device, with only landmark coordinates and the binary detection label
+leaving the patient’s premises.</p>
+<h2 id="conclusion">10. Conclusion</h2>
+<p>We presented a complete pose-only seizure-detection pipeline,
+covering preprocessing, hand-engineered kinematic and spectral features,
+a two-architecture deep-learning ensemble trained under patient-grouped
+cross-validation, test-time augmentation, and Docker-based deployment.
+The system reaches a mean validation <span
+class="math inline">\(F_1\)</span> of <span
+class="math inline">\(0.628\)</span> (CNN-GRU) and <span
+class="math inline">\(0.635\)</span> (TCN) per-fold under
+<code>StratifiedGroupKFold</code> with an ensemble operating threshold
+of <span class="math inline">\(0.65\)</span>. A video front-end lets the
+same models be applied to raw clinic footage, and several natural
+extensions — metric-scale 3D pose from MeTRAbs, multi-view
+triangulation, learned temporal architectures, calibrated probability
+outputs, and multimodal fusion — are sketched as forward directions.</p>
+<hr />
+<h2 id="appendix-a-repository-layout">Appendix A: Repository Layout</h2>
+<table>
+<colgroup>
+<col style="width: 32%" />
+<col style="width: 67%" />
+</colgroup>
+<thead>
+<tr>
+<th>File</th>
+<th>Role</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>config.py</code></td>
+<td>Hyperparameters and paths</td>
+</tr>
+<tr>
+<td><code>preprocessing.py</code></td>
+<td>NaN-handling, hip-centering, torso normalization</td>
+</tr>
+<tr>
+<td><code>features.py</code></td>
+<td>518-d per-frame feature extraction</td>
+</tr>
+<tr>
+<td><code>dataset.py</code></td>
+<td>Torch <code>Dataset</code> with augmentation</td>
+</tr>
+<tr>
+<td><code>model.py</code></td>
+<td>CNN-GRU, TCN, FocalLoss, Attention</td>
+</tr>
+<tr>
+<td><code>train.py</code></td>
+<td>5-fold × 2-architecture training</td>
+</tr>
+<tr>
+<td><code>train_all.py</code></td>
+<td>Training entry point</td>
+</tr>
+<tr>
+<td><code>inference.py</code></td>
+<td>Ensemble + TTA + thresholding</td>
+</tr>
+<tr>
+<td><code>main.py</code></td>
+<td>Challenge Docker entry point (<code>.npy</code>)</td>
+</tr>
+<tr>
+<td><code>video_to_features.py</code></td>
+<td>Video → <span class="math inline">\((150, 33, 5)\)</span> via
+MediaPipe</td>
+</tr>
+<tr>
+<td><code>predict_video.py</code></td>
+<td>Raw-video CLI entry point</td>
+</tr>
+<tr>
+<td><code>Dockerfile</code></td>
+<td>Inference image (Python 3.12 slim)</td>
+</tr>
+<tr>
+<td><code>requirements.txt</code></td>
+<td>Pinned dependencies</td>
+</tr>
+<tr>
+<td><code>checkpoints/</code></td>
+<td>10 fold weights + norm stats + results</td>
+</tr>
+</tbody>
+</table>
+<h2 id="appendix-b-reproducibility">Appendix B: Reproducibility</h2>
+<p><strong>Training:</strong></p>
+<pre><code>pip install -r requirements.txt
+python train_all.py</code></pre>
+<p><strong>Inference (challenge <code>.npy</code> format):</strong></p>
+<pre><code>python main.py &lt;test_dir&gt; &lt;output.csv&gt;</code></pre>
+<p><strong>Inference (raw video):</strong></p>
+<pre><code>mkdir models
+curl -L -o models/pose_landmarker.task \
+  https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_full/float16/latest/pose_landmarker_full.task
+python predict_video.py &lt;video_or_dir&gt; predictions.csv</code></pre>
+<h2 id="acknowledgments">Acknowledgments</h2>
+<p>This work was supported by the Federal Ministry of Research,
+Technology and Space under the funding code “KI-Servicezentrum
+Berlin-Brandenburg” (16IS22092). Responsibility for the content of this
+publication remains with the authors. We thank the Section on
+Computational Neurology at Charité — Universitätsmedizin Berlin and the
+organising committee of the 2026 International Conference on Artificial
+Intelligence in Epilepsy and Other Neurological Disorders for hosting
+the <em>Video-Based Seizure Detection Challenge</em> and for releasing
+the anonymised pose dataset on which this work is based.</p>
+<h2 id="references">References</h2>
+<p>[1] Fisher, R. S., Acevedo, C., Arzimanoglou, A., et al. (2014).
+<em>ILAE official report: a practical clinical definition of
+epilepsy.</em> Epilepsia, 55(4), 475–482. doi:10.1111/epi.12550.</p>
+<p>[2] Fisher, R. S., Cross, J. H., French, J. A., et al. (2017).
+<em>Operational classification of seizure types by the International
+League Against Epilepsy: position paper of the ILAE Commission for
+Classification and Terminology.</em> Epilepsia, 58(4), 522–530.
+doi:10.1111/epi.13670.</p>
+<p>[3] Karayiannis, N. B., Sami, A., Frost, J. D., Wise, M. S., &amp;
+Mizrahi, E. M. (2006). <em>Automated detection of videotaped neonatal
+seizures based on motion tracking methods.</em> Journal of Clinical
+Neurophysiology, 23(6), 521–531.
+doi:10.1097/00004691-200612000-00004.</p>
+<p>[4] Google, LLC. <em>MediaPipe Pose Landmarker.</em>
+https://developers.google.com/mediapipe/solutions/vision/pose_landmarker,
+accessed 2026.</p>
+<p>[5] Kwan, P., Arzimanoglou, A., Berg, A. T., et al. (2010).
+<em>Definition of drug resistant epilepsy: consensus proposal by the ad
+hoc Task Force of the ILAE Commission on Therapeutic Strategies.</em>
+Epilepsia, 51(6), 1069–1077. doi:10.1111/j.1528-1167.2009.02397.x.</p>
+<p>[6] Scheffer, I. E., Berkovic, S., Capovilla, G., et al. (2017).
+<em>ILAE classification of the epilepsies: position paper of the ILAE
+Commission for Classification and Terminology.</em> Epilepsia, 58(4),
+512–521. doi:10.1111/epi.13709.</p>
+<p>[7] Tzallas, A. T., Tsipouras, M. G., &amp; Fotiadis, D. I. (2009).
+<em>Epileptic seizure detection in EEGs using time–frequency
+analysis.</em> IEEE Transactions on Information Technology in
+Biomedicine, 13(5), 703–710. doi:10.1109/TITB.2009.2017939.</p>
+<p>[8] Yan, S., Xiong, Y., &amp; Lin, D. (2018). <em>Spatial temporal
+graph convolutional networks for skeleton-based action recognition.</em>
+AAAI. doi:10.1609/aaai.v32i1.12328.</p>
+<p>[9] Shi, L., Zhang, Y., Cheng, J., &amp; Lu, H. (2019).
+<em>Two-stream adaptive graph convolutional networks for skeleton-based
+action recognition.</em> CVPR. doi:10.1109/CVPR.2019.01230.</p>
+<p>[10] Liu, Z., Zhang, Hongwen, Chen, Z., Wang, Z., &amp; Ouyang, W.
+(2020). <em>Disentangling and unifying graph convolutions for
+skeleton-based action recognition.</em> CVPR.
+doi:10.1109/CVPR42600.2020.00022.</p>
+<p>[11] Duan, H., Zhao, Y., Chen, K., Lin, D., &amp; Dai, B. (2022).
+<em>Revisiting skeleton-based action recognition.</em> CVPR.
+doi:10.1109/CVPR52688.2022.00298.</p>
+<p>[12] Cao, Z., Hidalgo, G., Simon, T., Wei, S.-E., &amp; Sheikh, Y.
+(2021). <em>OpenPose: realtime multi-person 2D pose estimation using
+part affinity fields.</em> IEEE TPAMI, 43(1), 172–186.
+doi:10.1109/TPAMI.2019.2929257.</p>
+<p>[13] Bazarevsky, V., Grishchenko, I., Raveendran, K., Zhu, T., Zhang,
+F., &amp; Grundmann, M. (2020). <em>BlazePose: on-device real-time body
+pose tracking.</em> CVPR Workshops. arXiv:2006.10204.</p>
+<p>[14] Sun, K., Xiao, B., Liu, D., &amp; Wang, J. (2019). <em>Deep
+high-resolution representation learning for human pose estimation.</em>
+CVPR. doi:10.1109/CVPR.2019.00584.</p>
+<p>[15] Jiang, T., Lu, P., Zhang, L., et al. (2023). <em>RTMPose:
+real-time multi-person pose estimation based on MMPose.</em>
+arXiv:2303.07399.</p>
+<p>[16] Pavllo, D., Feichtenhofer, C., Grangier, D., &amp; Auli, M.
+(2019). <em>3D human pose estimation in video with temporal convolutions
+and semi-supervised training.</em> CVPR.
+doi:10.1109/CVPR.2019.00794.</p>
+<p>[17] Sárándi, I., Linder, T., Arras, K. O., &amp; Leibe, B. (2021).
+<em>MeTRAbs: metric-scale truncation-robust heatmaps for absolute 3D
+human pose estimation.</em> IEEE Transactions on Biometrics, Behavior,
+and Identity Science, 3(1), 16–30. doi:10.1109/TBIOM.2020.3037257.</p>
+<p>[18] Beniczky, S. (2018). <em>Standards for testing and clinical
+validation of seizure detection devices.</em> Epilepsia, 59(S1), 9–13.
+doi:10.1111/epi.14049.</p>
+<p>[19] Onorati, F., Regalia, G., Caborni, C., et al. (2017).
+<em>Multicenter clinical assessment of improved wearable multimodal
+convulsive seizure detectors.</em> Epilepsia, 58(11), 1870–1879.
+doi:10.1111/epi.13899.</p>
+<p>[20] Cuppens, K., Karsmakers, P., Van de Vel, A., et al. (2014).
+<em>Accelerometry-based home monitoring for detection of nocturnal
+hypermotor seizures based on novelty detection.</em> IEEE Journal of
+Biomedical and Health Informatics, 18(3), 1026–1033.
+doi:10.1109/JBHI.2013.2285015.</p>
+<p>[21] Geertsema, E. E., Thijs, R. D., Gutter, T., et al. (2018).
+<em>Automated video-based detection of nocturnal convulsive seizures in
+a residential care setting.</em> Epilepsia, 59(S1), 53–60.
+doi:10.1111/epi.14050.</p>
+<p>[22] Hochreiter, S., &amp; Schmidhuber, J. (1997). <em>Long
+short-term memory.</em> Neural Computation, 9(8), 1735–1780.
+doi:10.1162/neco.1997.9.8.1735.</p>
+<p>[23] Cho, K., van Merriënboer, B., Gülçehre, Ç., et al. (2014).
+<em>Learning phrase representations using RNN encoder–decoder for
+statistical machine translation.</em> EMNLP.
+doi:10.3115/v1/D14-1179.</p>
+<p>[24] Bai, S., Kolter, J. Z., &amp; Koltun, V. (2018). <em>An
+empirical evaluation of generic convolutional and recurrent networks for
+sequence modeling.</em> arXiv:1803.01271.</p>
+<p>[25] Vaswani, A., Shazeer, N., Parmar, N., et al. (2017).
+<em>Attention is all you need.</em> NeurIPS. arXiv:1706.03762.</p>
+<p>[26] Lin, T.-Y., Goyal, P., Girshick, R., He, K., &amp; Dollár, P.
+(2017). <em>Focal loss for dense object detection.</em> ICCV.
+doi:10.1109/ICCV.2017.324.</p>
+<p>[27] Zhang, H., Cisse, M., Dauphin, Y. N., &amp; Lopez-Paz, D.
+(2018). <em>mixup: beyond empirical risk minimization.</em> ICLR.</p>
+<p>[28] Shanmugam, D., Blalock, D., Balakrishnan, G., &amp; Guttag, J.
+(2021). <em>Better aggregation in test-time augmentation.</em> ICCV.
+doi:10.1109/ICCV48922.2021.00125.</p>
+<p>[29] de la Place, F. <em>Dynamic Extrinsic Camera Calibrator.</em>
+https://github.com/flodelaplace/lab-camera-dynamic-calibrator.</p>
+<p>[30] Loshchilov, I., &amp; Hutter, F. (2019). <em>Decoupled weight
+decay regularization.</em> ICLR.</p>
+<p>[31] Smith, L. N., &amp; Topin, N. (2019). <em>Super-convergence:
+very fast training of neural networks using large learning rates.</em>
+In Artificial Intelligence and Machine Learning for Multi-Domain
+Operations Applications, SPIE. doi:10.1117/12.2520589.</p>
+<p>[32] Gu, A., &amp; Dao, T. (2023). <em>Mamba: linear-time sequence
+modeling with selective state spaces.</em> arXiv:2312.00752.</p>
+<p>[33] Guo, C., Pleiss, G., Sun, Y., &amp; Weinberger, K. Q. (2017).
+<em>On calibration of modern neural networks.</em> ICML.</p>
+<p>[34] Owoyele, B. A., Schilling, M., Sawahn, R., Kaemer, N.,
+Zherebenkov, P., Verma, B., Pouw, W., &amp; de Melo, G. (2024).
+<em>MaskAnyone toolkit: offering strategies for minimizing privacy risks
+and maximizing utility in audio-visual data archiving.</em> Proceedings
+of the 45th International Conference on Information Systems (ICIS),
+Bangkok. https://aisel.aisnet.org/icis2024/adv_theory/adv_theory/1/.</p>
+</body>
+</html>
